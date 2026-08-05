@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name if product else "Not found" }} &middot; Contoso Outdoors{% endblock %}
+{% block content %}
+{% if not product %}
+<p class="empty">Product not found. <a href="/">Back to catalog</a>.</p>
+{% else %}
+<a class="back" href="/">&larr; Catalog</a>
+<section class="detail">
+    <div class="detail-media">
+        <img src="{{ product.image_url }}" alt="{{ product.name }}" />
+    </div>
+    <div class="detail-body">
+        <span class="card-brand">{{ product.brand }} &middot; {{ product.category }}</span>
+        <h1>{{ product.name }}</h1>
+        <p class="price">${{ '%.2f' | format(product.price) }}</p>
+        <p class="desc">{{ product.description }}</p>
+        <p class="stock">{{ product.inventory }} in stock</p>
+
+        <form class="buy" action="/orders" method="post">
+            <input type="hidden" name="product_id" value="{{ product.id }}" />
+            <label>Qty
+                <input type="number" name="quantity" value="1" min="1" max="{{ product.inventory }}" />
+            </label>
+            <button type="submit" class="btn">Place order</button>
+        </form>
+
+        <details class="admin" {% if updated %}open{% endif %}>
+            <summary>Update price (write-through)</summary>
+            <form action="/product/{{ product.id }}/price" method="post">
+                <input type="number" step="0.01" name="price" value="{{ '%.2f' | format(product.price) }}" />
+                <button type="submit" class="btn btn-ghost">Save</button>
+            </form>
+            <small>Writes PostgreSQL and the cache in one operation, so the new price shows immediately.</small>
+            {% if updated %}
+            <p class="update-banner">Price updated — written to PostgreSQL <strong>and</strong> the Redis cache.</p>
+            {% endif %}
+        </details>
+
+        <p class="cache-badge cache-{{ source }}">
+            {% if source == 'cache' %}Served from Redis cache{% else %}Served from PostgreSQL{% endif %}
+            &middot; {{ '%.1f' | format(elapsed_ms) }} ms
+        </p>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
