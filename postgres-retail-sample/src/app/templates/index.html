@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+    <h1>Gear for the outdoors</h1>
+    <p>Reads served from Azure Managed Redis, backed by Azure Database for PostgreSQL.</p>
+</section>
+
+{% if categories %}
+<div class="chips">
+    <a class="chip {% if not active_category %}chip-active{% endif %}" href="/">All</a>
+    {% for category in categories %}
+    <a class="chip {% if active_category == category.name %}chip-active{% endif %}" href="/?category={{ category.name | urlencode }}">{{ category.name }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<section class="grid">
+    {% for product in products %}
+    <a class="card" href="/product/{{ product.id }}">
+        <div class="card-media">
+            <img src="{{ product.image_url }}" alt="{{ product.name }}" loading="lazy" />
+        </div>
+        <div class="card-body">
+            <span class="card-brand">{{ product.brand }}</span>
+            <span class="card-name">{{ product.name }}</span>
+            <span class="card-price">${{ '%.2f' | format(product.price) }}</span>
+        </div>
+    </a>
+    {% endfor %}
+</section>
+{% endblock %}
