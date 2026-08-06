@@ -2,8 +2,8 @@
 param location string
 param tags object
 param resourceToken string
-@description('Container image for the web service; empty uses a placeholder until azd deploys.')
-param webImageName string = ''
+@description('Whether the web container app already exists. When true, provisioning keeps the running image; azd sets the built image during the deploy step.')
+param webExists bool = false
 
 @description('Resource ID of the user-assigned identity.')
 param identityId string
@@ -88,6 +88,11 @@ resource redis 'Microsoft.Cache/redisEnterprise@2025-07-01' = {
   location: location
   tags: tags
   sku: { name: 'Balanced_B0' }
+  properties: {
+    // Required as of API 2025-07-01. The app connects over the public endpoint
+    // (with firewall rules), so public network access is enabled.
+    publicNetworkAccess: 'Enabled'
+  }
 }
 
 resource redisDb 'Microsoft.Cache/redisEnterprise/databases@2025-07-01' = {
@@ -109,7 +114,7 @@ resource redisDb 'Microsoft.Cache/redisEnterprise/databases@2025-07-01' = {
 
 resource redisAccess 'Microsoft.Cache/redisEnterprise/databases/accessPolicyAssignments@2025-07-01' = {
   parent: redisDb
-  name: 'app-identity'
+  name: 'appidentity'  // alphanumeric only, 1-60 chars (no hyphens)
   properties: {
     accessPolicyName: 'default'
     user: { objectId: identityPrincipalId }
@@ -124,6 +129,14 @@ resource env 'Microsoft.App/managedEnvironments@2026-01-01' = {
   location: location
   tags: tags
   properties: {}
+}
+
+// azd builds and pushes the image during its deploy step, which runs after
+// provisioning. To avoid referencing an image tag that doesn't exist yet,
+// provisioning uses a placeholder on first create and preserves the running image
+// on updates; the deploy step then sets the freshly built image.
+resource existingWeb 'Microsoft.App/containerApps@2026-01-01' existing = if (webExists) {
+  name: '${prefix}-web-${resourceToken}'
 }
 
 resource web 'Microsoft.App/containerApps@2026-01-01' = {
@@ -147,7 +160,8 @@ resource web 'Microsoft.App/containerApps@2026-01-01' = {
       containers: [
         {
           name: 'web'
-          image: empty(webImageName) ? placeholderImage : webImageName
+          #disable-next-line BCP318
+          image: webExists ? existingWeb.properties.template.containers[0].image : placeholderImage
           resources: { cpu: json('0.5'), memory: '1.0Gi' }
           env: [
             { name: 'AZURE_CLIENT_ID', value: identityClientId }

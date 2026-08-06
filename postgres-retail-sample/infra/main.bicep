@@ -9,8 +9,8 @@ param environmentName string
 @description('Primary location for all resources.')
 param location string
 
-@description('Container image for the web service. azd sets this after building.')
-param webImageName string = ''
+@description('Whether the web container app already exists. azd sets this so provisioning preserves the running image and the deploy step updates it.')
+param webExists bool = false
 
 var tags = { 'azd-env-name': environmentName }
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -41,7 +41,7 @@ module resources 'resources.bicep' = {
     location: location
     tags: tags
     resourceToken: resourceToken
-    webImageName: webImageName
+    webExists: webExists
     identityId: identity.outputs.id
     identityPrincipalId: identity.outputs.principalId
     identityClientId: identity.outputs.clientId
