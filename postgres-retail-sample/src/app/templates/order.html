@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Order #{{ order_id }} &middot; Contoso Outdoors{% endblock %}
+{% block content %}
+<a class="back" href="/">&larr; Catalog</a>
+<section class="order">
+    <h1>Order #{{ order_id }}</h1>
+    <p>Status is served from the Redis order-status projection, updated by the fulfillment worker through Redis Streams.</p>
+
+    <ol class="timeline" id="timeline">
+        <li data-state="placed">Placed</li>
+        <li data-state="paid">Paid</li>
+        <li data-state="packed">Packed</li>
+        <li data-state="shipped">Shipped</li>
+        <li data-state="delivered">Delivered</li>
+    </ol>
+
+    <p class="status-line">Current status: <strong id="status">{{ status }}</strong></p>
+</section>
+
+<script>
+const ORDER_ID = {{ order_id }};
+const STATES = ["placed", "paid", "packed", "shipped", "delivered"];
+
+function render(status) {
+    document.getElementById("status").textContent = status;
+    const idx = STATES.indexOf(status);
+    document.querySelectorAll("#timeline li").forEach((li) => {
+        li.classList.toggle("done", STATES.indexOf(li.dataset.state) <= idx);
+    });
+}
+
+async function poll() {
+    try {
+        const res = await fetch(`/api/orders/${ORDER_ID}`);
+        const data = await res.json();
+        if (data.status) render(data.status);
+        if (data.status !== "delivered") setTimeout(poll, 1500);
+    } catch (e) {
+        setTimeout(poll, 3000);
+    }
+}
+
+render("{{ status }}");
+poll();
+</script>
+{% endblock %}
