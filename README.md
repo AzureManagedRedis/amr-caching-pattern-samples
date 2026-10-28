@@ -9,9 +9,9 @@ self-contained app you can deploy to Azure with a single `azd up`.
 | Sample | Database | What it shows |
 | --- | --- | --- |
 | [postgres-retail-sample](postgres-retail-sample/) | Azure Database for PostgreSQL flexible server | A retail storefront demonstrating four caching patterns with AMR as the cache |
+| [azure-sql-retail-sample](azure-sql-retail-sample/) | Azure SQL Database | A retail storefront demonstrating five caching patterns with AMR as the cache, including SQL change tracking and an Azure Functions SQL trigger |
 
-Samples for other databases (for example, Azure SQL and Azure Cosmos DB) will follow the
-same structure.
+Samples for other databases (for example, Azure Cosmos DB) will follow the same structure.
 
 ## Caching patterns
 
@@ -22,7 +22,8 @@ Every sample draws from the same vocabulary of patterns:
 | Cache-aside | Read from the cache first; on a miss, read the database and store the result for next time. |
 | Reference-data prefetching | Proactively load stable, rarely-changing data into the cache so reads never hit the database; refresh when the source changes. |
 | Write-through | Write to the database and the cache in the same operation, so the cache is never stale. |
-| Event-driven | Publish changes as events; a worker updates the cached view, keeping it fresh without waiting for a TTL. |
+| Event-driven | Publish changes as events; a worker updates or invalidates the cached view, keeping it fresh without waiting for a TTL. |
+| Write-behind | Absorb frequent writes in the cache and flush them to the database in batches. |
 
 Each sample's README shows how these patterns map to that database and application.
 
@@ -40,6 +41,7 @@ with `azd down --purge --force` when you are finished.
 ```
 amr-caching-pattern-samples/
   postgres-retail-sample/   PostgreSQL + AMR retail storefront demonstrating four patterns
+  azure-sql-retail-sample/  Azure SQL Database + AMR retail storefront demonstrating five patterns
   LICENSE                   MIT license for the repository
   README.md                 This file
 ```
