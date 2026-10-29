@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name if product else "Not found" }} &middot; Contoso Outdoors{% endblock %}
+{% block content %}
+{% if not product %}
+<p class="empty">Product not found. <a href="/">Back to catalog</a>.</p>
+<p class="cache-badge cache-{{ source }}">
+    {% if source == 'cache' %}"Not found" served from Redis cache{% else %}Checked Azure Cosmos DB{% endif %}
+    &middot; {{ '%.1f' | format(elapsed_ms) }} ms
+</p>
+{% else %}
+<a class="back" href="/?category={{ product.categoryId }}">&larr; {{ category_name }}</a>
+<section class="detail">
+    <div class="detail-media">
+        <img src="{{ product.imageUrl }}" alt="{{ product.name }}" />
+    </div>
+    <div class="detail-body">
+        <span class="card-brand">{{ product.brand }} &middot; {{ category_name }}</span>
+        <h1>{{ product.name }}</h1>
+        <p class="price">${{ '%.2f' | format(product.price) }}</p>
+        <p class="desc">{{ product.description }}</p>
+        <p class="stock">{{ product.stock }} in stock &middot; {{ '%.1f' | format(product.rating) }} / 5</p>
+
+        {% if added %}
+        <p class="update-banner">Added to your cart in Redis. <a href="/cart">View cart</a>.</p>
+        {% endif %}
+        <form action="/cart/add" method="post">
+            <input type="hidden" name="category_id" value="{{ product.categoryId }}" />
+            <input type="hidden" name="product_id" value="{{ product.id }}" />
+            <button type="submit" class="btn">Add to cart</button>
+        </form>
+
+        <details class="admin" {% if updated %}open{% endif %}>
+            <summary>Update price (write-through)</summary>
+            <form action="/product/{{ product.categoryId }}/{{ product.id }}/price" method="post">
+                <input type="number" step="0.01" min="0" name="price" value="{{ '%.2f' | format(product.price) }}" />
+                <button type="submit" class="btn btn-ghost">Save</button>
+            </form>
+            <small>Patches the price in Azure Cosmos DB, then caches the item the patch returns, so the new price shows immediately.</small>
+            {% if updated %}
+            <p class="update-banner">Price updated in Azure Cosmos DB <strong>and</strong> the Redis cache.</p>
+            {% endif %}
+        </details>
+
+        <details class="admin" {% if restocked %}open{% endif %}>
+            <summary>Restock from the warehouse (event-driven refresh)</summary>
+            <form action="/product/{{ product.categoryId }}/{{ product.id }}/restock" method="post">
+                <input type="number" name="quantity" value="10" min="1" />
+                <button type="submit" class="btn btn-ghost">Restock</button>
+            </form>
+            <small>Simulates another system that writes Azure Cosmos DB only. The Azure Functions trigger for Azure Cosmos DB refreshes this product's cache key from the change feed within seconds.</small>
+            {% if restocked %}
+            <p class="update-banner">Stock updated in Azure Cosmos DB only. This page may still show the cached stock; refresh in a few seconds to see the change feed update the cache.</p>
+            {% endif %}
+        </details>
+
+        <details class="admin">
+            <summary>Remove this product (soft delete)</summary>
+            <form action="/product/{{ product.categoryId }}/{{ product.id }}/delete" method="post">
+                <button type="submit" class="btn btn-ghost">Remove</button>
+            </form>
+            <small>Sets <code>isDeleted</code> and a <code>ttl</code> in Azure Cosmos DB only. The change feed function deletes the cached product and listing within seconds, and TTL removes the item later.</small>
+        </details>
+
+        <p class="cache-badge cache-{{ source }}">
+            {% if source == 'cache' %}Served from Redis cache{% else %}Served from Azure Cosmos DB{% endif %}
+            &middot; {{ '%.1f' | format(elapsed_ms) }} ms
+        </p>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

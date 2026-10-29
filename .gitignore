@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 .venv/
 .azure/
-infra/main.json
+**/infra/main.json
+local.settings.json
