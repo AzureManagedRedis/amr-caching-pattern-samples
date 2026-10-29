@@ -57,8 +57,9 @@ something you can do in the storefront.
   `SYNC_INTERVAL_SECONDS`. See [`prefetch.py`](src/app/patterns/prefetch.py).
 - **Write-through: price updates.** On a product page, expand **Update price
   (write-through)** and save. The app writes Azure SQL, then refreshes the cached
-  product, so the new price shows immediately. See
-  [`write_through.py`](src/app/patterns/write_through.py).
+  product, so the new price shows immediately. The SQL trigger also sees this change
+  and deletes the key a few seconds later; the next read reloads it from the
+  database. See [`write_through.py`](src/app/patterns/write_through.py).
 - **Event-driven invalidation: restock.** On a product page, expand **Restock from
   the warehouse** and click **Restock**. This updates Azure SQL directly and doesn't
   touch Redis, the way a batch job or another service would. The Azure Functions
@@ -81,7 +82,7 @@ Prerequisites:
 - Permissions to create resources **and role assignments**: **Owner**, or
   **Contributor + Role Based Access Control Administrator** (the template assigns
   roles to the app and function identities, which Contributor alone can't do)
-- Python 3.11+ (only needed to run locally)
+- Python 3.10 or later (only needed to run locally)
 
 ```bash
 azd auth login
@@ -90,7 +91,10 @@ azd up
 
 On first start the web app creates the schema, enables change tracking, grants the
 function app's identity what the SQL trigger needs, and seeds the catalog, so the
-storefront is ready as soon as `azd` finishes.
+storefront is ready as soon as `azd` finishes. Until that first start finishes, the
+function app's log shows SQL trigger listener errors such as `Login failed`, because
+its database user doesn't exist yet. The host retries, and the listener starts on its
+own once the grants are in place.
 
 > TIP: If `azd up` fails on a resource, try redeploying in a different region:
 > `azd down --purge --force`, then `azd env set AZURE_LOCATION <region>` and `azd up`.
@@ -104,7 +108,7 @@ storefront is ready as soon as `azd` finishes.
 | Azure Managed Redis | `Balanced_B0`, OSS clustering policy, Entra-only auth |
 | Azure SQL Database | `Basic`, Entra-only auth |
 | Azure Container Apps environment + web app | Consumption, 1-3 replicas |
-| Azure Functions app (SQL trigger) | Linux App Service plan `B1`, Python 3.11 |
+| Azure Functions app (SQL trigger) | Linux App Service plan `B1`, Python 3.12 |
 | Storage account (Functions runtime) | `Standard_LRS` |
 | Azure Container Registry | `Basic` |
 | User-assigned managed identities (web app, function app) | - |

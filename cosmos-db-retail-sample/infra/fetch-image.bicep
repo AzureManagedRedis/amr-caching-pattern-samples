@@ -1,6 +1,8 @@
-// Returns the image the container app is running, so provisioning can keep it.
-// Kept in its own module: reading the app in the same template that declares it
-// creates a circular dependency.
+// Returns the image the container app is running. When the app already exists,
+// resources.bicep uses this image instead of the placeholder, so `azd provision`
+// keeps the image that `azd deploy` set. Reading the app in a separate module keeps
+// that lookup apart from the app's own declaration; an inline `existing` reference
+// works too.
 param name string
 param exists bool
 
