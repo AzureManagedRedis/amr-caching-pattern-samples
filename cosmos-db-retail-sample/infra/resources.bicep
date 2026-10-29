@@ -64,6 +64,10 @@ resource cosmos 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
     // Keys are off: the app, the function, and the developer use Microsoft Entra ID.
     disableLocalAuth: true
     publicNetworkAccess: 'Enabled'
+    // 0.0.0.0 accepts connections only from Azure datacenters, which covers the
+    // container app and the function app. To run the app locally, add your IP
+    // (see "Run locally" in the README).
+    ipRules: [ { ipAddressOrRange: '0.0.0.0' } ]
     minimalTlsVersion: 'Tls12'
   }
 }
@@ -314,7 +318,7 @@ resource func 'Microsoft.Web/sites@2024-04-01' = {
     serverFarmId: plan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'Python|3.11'
+      linuxFxVersion: 'Python|3.12'
       alwaysOn: true
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
@@ -333,12 +337,25 @@ resource func 'Microsoft.Web/sites@2024-04-01' = {
         { name: 'CosmosDBConnection__clientId', value: funcIdentityClientId }
         // Used by shared/cache.py (DefaultAzureCredential picks the identity from AZURE_CLIENT_ID).
         { name: 'AZURE_CLIENT_ID', value: funcIdentityClientId }
-        { name: 'COSMOS_ENDPOINT', value: cosmos.properties.documentEndpoint }
         { name: 'REDIS_HOST', value: redis.properties.hostName }
       ]
     }
   }
   dependsOn: [ storageAccess, cosmosContainers, cosmosFuncAccess, redisFuncAccess ]
+}
+
+// Turn off basic (username and password) publishing credentials. azd deploys
+// with your Microsoft Entra sign-in instead.
+resource funcScmCredentials 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2024-04-01' = {
+  parent: func
+  name: 'scm'
+  properties: { allow: false }
+}
+
+resource funcFtpCredentials 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2024-04-01' = {
+  parent: func
+  name: 'ftp'
+  properties: { allow: false }
 }
 
 output registryLoginServer string = registry.properties.loginServer

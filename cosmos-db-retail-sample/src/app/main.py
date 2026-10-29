@@ -54,7 +54,7 @@ async def assign_user(request: Request, call_next):
     request.state.user_id = user_id or uuid.uuid4().hex
     response = await call_next(request)
     if is_new:
-        response.set_cookie(USER_COOKIE, request.state.user_id, httponly=True, samesite="lax")
+        response.set_cookie(USER_COOKIE, request.state.user_id, httponly=True, secure=True, samesite="lax")
     return response
 
 

@@ -94,7 +94,7 @@ Prerequisites:
 - Permissions to create resources **and role assignments**: **Owner**, or
   **Contributor + Role Based Access Control Administrator** (the template assigns
   roles to the app and function identities, which Contributor alone can't do)
-- Python 3.11+ (only needed to run locally)
+- Python 3.10 or later (only needed to run locally)
 
 ```bash
 azd auth login
@@ -118,7 +118,7 @@ hashes, so the storefront is ready as soon as `azd` finishes.
 | Azure Managed Redis | `Balanced_B0`, OSS clustering policy, Entra-only auth |
 | Azure Cosmos DB for NoSQL account | Serverless, local (key) auth disabled |
 | Azure Container Apps environment + web app | Consumption, 1-3 replicas |
-| Azure Functions app (Azure Cosmos DB triggers) | Linux App Service plan `B1`, Python 3.11 |
+| Azure Functions app (Azure Cosmos DB triggers) | Linux App Service plan `B1`, Python 3.12 |
 | Storage account (Functions runtime) | `Standard_LRS` |
 | Azure Container Registry | `Basic` |
 | User-assigned managed identities (web app, function app) | - |
@@ -143,11 +143,29 @@ recoverable copy after delete) so nothing lingers or keeps billing.
 Run the app on your machine against the Azure resources you deployed. The app
 authenticates as your `az login` account. During `azd up`, the template already gave
 your account the **Cosmos DB Built-in Data Contributor** role and a Redis access
-policy assignment, and the account accepts connections from any network, so there's
-nothing else to set up.
+policy assignment, so you only need to let your IP through the Azure Cosmos DB
+firewall. The account accepts connections only from Azure datacenters (the IP rule
+`0.0.0.0`), which covers the deployed web app and function app.
 
-Get `<cosmos-account>`, `<amr-name>`, and `<region>` from `azd env get-values`
-(`COSMOS_ENDPOINT` and `REDIS_HOST` hold the full values).
+Get `<resource-group>`, `<cosmos-account>`, `<amr-name>`, and `<region>` from
+`azd env get-values` (`AZURE_RESOURCE_GROUP`, `COSMOS_ACCOUNT`, and `REDIS_HOST`).
+
+`--ip-range-filter` replaces the whole list, so keep `0.0.0.0` in it, or the deployed
+apps lose access:
+
+```powershell
+$ip = Invoke-RestMethod https://api.ipify.org
+az cosmosdb update `
+  --resource-group <resource-group> `
+  --name <cosmos-account> `
+  --ip-range-filter "0.0.0.0,$ip"
+```
+
+The update can take a few minutes. Running `azd provision` or `azd up` again resets
+the list to `0.0.0.0`, so rerun this command afterward. For more options, see
+[Configure IP firewall in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/how-to-configure-firewall).
+
+Then run the app:
 
 ```powershell
 python -m venv .venv; .venv\Scripts\Activate.ps1
@@ -177,8 +195,9 @@ creates the database and containers, including the `leases` container that the
 Azure Functions trigger would otherwise try to create. In production, consider a
 [custom role definition](https://learn.microsoft.com/azure/cosmos-db/how-to-connect-role-based-access-control)
 scoped to the containers each identity uses, for example read-only access to
-`reference` for the web app.
-[See more information.](https://learn.microsoft.com/azure/cosmos-db/how-to-connect-role-based-access-control)
+`reference` for the web app. For the built-in roles and the data actions a custom
+role can grant,
+[see the data plane security reference.](https://learn.microsoft.com/azure/cosmos-db/nosql/reference-data-plane-security)
 
 ## Layout
 
@@ -193,7 +212,7 @@ src/app/
   templates/, static/  Self-contained storefront UI
 functions/
   function_app.py    Azure Cosmos DB triggers: refresh products, best sellers, reference data
-  shared/cache.py    The article's step 2 clients and clean()
+  shared/cache.py    The article's step 2 Redis client and clean()
 infra/               Bicep (Container Apps, Azure Cosmos DB, Azure Managed Redis, Functions)
 ```
 

@@ -52,7 +52,11 @@ def checkout(user_id: str, customer_id: str, checkout_id: str) -> dict:
     lines = []
     for member, quantity in cart.items():
         category_id, product_id = member.split(":", 1)
-        product = products.read_item(item=product_id, partition_key=category_id)
+        try:
+            product = products.read_item(item=product_id, partition_key=category_id)
+        except CosmosResourceNotFoundError:
+            # The product was removed, or its soft-delete TTL expired, after it was added to the cart.
+            raise ValueError(f"Product {product_id} is no longer available.") from None
         if product.get("isDeleted"):
             raise ValueError(f"Product {product_id} is no longer available.")
         lines.append({
