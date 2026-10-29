@@ -17,10 +17,10 @@ param principalId string = ''
 @description('Type of the principal running azd: User or ServicePrincipal (set by azd).')
 param principalType string = 'User'
 var tags = { 'azd-env-name': environmentName }
-var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
+var resourceToken = toLower(uniqueString(subscription().id, environmentName, location, 'cosmos-db'))
 
 resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
-  name: 'rg-${environmentName}'
+  name: 'rg-cosmos-${environmentName}'
   location: location
   tags: tags
 }

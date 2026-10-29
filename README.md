@@ -21,10 +21,22 @@ Every sample draws from the same vocabulary of patterns:
 | Cache-aside | Read from the cache first; on a miss, read the database and store the result for next time. |
 | Reference-data prefetching | Proactively load stable, rarely-changing data into the cache so reads never hit the database; refresh when the source changes. |
 | Write-through | Write to the database and the cache in the same operation, so the cache is never stale. |
-| Event-driven | Publish changes as events; a worker updates or invalidates the cached view, keeping it fresh without waiting for a TTL. |
+| Event-driven | Changes arrive as events (a Redis Stream, SQL change tracking, or the Azure Cosmos DB change feed), and a worker or function updates or invalidates the cached view. |
 | Write-behind | Absorb frequent writes in the cache and flush them to the database in batches. |
 | Sorted-set ranking | The cache maintains a ranking incrementally as changes arrive, instead of recomputing it on every read. |
 | Session and state offload | Transient state, such as shopping carts and user sessions, lives in the cache instead of the database. |
+
+Which sample shows which pattern:
+
+| Pattern | Postgres | Azure SQL | Azure Cosmos DB |
+| --- | --- | --- | --- |
+| Cache-aside | ✓ | ✓ | ✓ |
+| Reference-data prefetching | ✓ | ✓ | ✓ |
+| Write-through | ✓ | ✓ | ✓ |
+| Event-driven | Redis Streams worker | Functions SQL trigger (invalidate) | Functions Azure Cosmos DB trigger (refresh) |
+| Write-behind | | ✓ | |
+| Sorted-set ranking | | | ✓ |
+| Session and state offload | | | ✓ |
 
 Each sample's README shows how these patterns map to that database and application.
 
@@ -33,6 +45,9 @@ Each sample's README shows how these patterns map to that database and applicati
 1. Install [azd](https://aka.ms/azd-install) and the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), then sign in with `az login` and `azd auth login`.
 2. Change into the sample folder, for example `cd postgres-retail-sample`.
 3. Follow that sample's README to deploy (`azd up`) or run it locally.
+
+Use a different azd environment name for each sample (for example, `azd env new sql-retail`),
+so deploying one sample doesn't overwrite or tear down another.
 
 Each sample provisions its own Azure resources and **bills while it runs**, so tear it down
 with `azd down --purge --force` when you are finished.
