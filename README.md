@@ -20,7 +20,7 @@ Every sample draws from the same vocabulary of patterns:
 | --- | --- |
 | Cache-aside | Read from the cache first; on a miss, read the database and store the result for next time. |
 | Reference-data prefetching | Proactively load stable, rarely-changing data into the cache so reads never hit the database; refresh when the source changes. |
-| Write-through | Write to the database and the cache in the same operation, so the cache is never stale. |
+| Write-through | Update the cache right after the database write succeeds, so reads see the change almost immediately. |
 | Event-driven | Changes arrive as events (a Redis Stream, SQL change tracking, or the Azure Cosmos DB change feed), and a worker or function updates or invalidates the cached view. |
 | Write-behind | Absorb frequent writes in the cache and flush them to the database in batches. |
 | Sorted-set ranking | The cache maintains a ranking incrementally as changes arrive, instead of recomputing it on every read. |
