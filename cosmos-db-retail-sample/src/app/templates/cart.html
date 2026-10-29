@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Cart &middot; Contoso Outdoors{% endblock %}
+{% block content %}
+<a class="back" href="/">&larr; Catalog</a>
+<section class="stats">
+    <h1>Your cart</h1>
+    <p class="desc">Your cart lives in the Redis hash <code>cart:&lt;user&gt;</code> and expires after {{ cart_ttl_minutes }} minutes of inactivity. Adding items costs no RUs. Checkout reads current prices from Azure Cosmos DB and writes one order.</p>
+
+    {% if order %}
+    <p class="update-banner">Order <code>{{ order }}</code> saved to Azure Cosmos DB. The best-sellers ranking updates from the change feed within seconds. <a href="/bestsellers">View best sellers</a>.</p>
+    {% endif %}
+    {% if error %}
+    <p class="update-banner">{{ error }}</p>
+    {% endif %}
+
+    {% if lines %}
+    <table>
+        <thead>
+            <tr><th>Product</th><th>Quantity</th><th>Price</th></tr>
+        </thead>
+        <tbody>
+            {% for line in lines %}
+            <tr>
+                <td><a href="/product/{{ line.product.categoryId }}/{{ line.product.id }}">{{ line.product.name }}</a></td>
+                <td>{{ line.quantity }}</td>
+                <td>${{ '%.2f' | format(line.product.price * line.quantity) }}</td>
+            </tr>
+            {% endfor %}
+            <tr><td><strong>Total</strong></td><td></td><td><strong>${{ '%.2f' | format(total) }}</strong></td></tr>
+        </tbody>
+    </table>
+
+    <details class="admin" open>
+        <summary>Shipping options (reference data from Redis)</summary>
+        <ul>
+            {% for option in shipping %}
+            <li>{{ option.name }}: {% if option.data.price %}${{ '%.2f' | format(option.data.price) }}{% else %}free{% endif %}</li>
+            {% endfor %}
+        </ul>
+        {% if store.data %}<small>{{ store.name }} ships free on orders over ${{ store.data.freeShippingOver }}.</small>{% endif %}
+    </details>
+
+    <form action="/checkout" method="post" class="admin">
+        <input type="hidden" name="checkout_id" value="{{ checkout_id }}" />
+        <button type="submit" class="btn">Check out</button>
+        <small>The checkout ID is an idempotency key: submitting this form twice creates one order.</small>
+    </form>
+    {% elif not order %}
+    <p class="empty">Your cart is empty. <a href="/">Browse the catalog</a>.</p>
+    {% endif %}
+</section>
+{% endblock %}
