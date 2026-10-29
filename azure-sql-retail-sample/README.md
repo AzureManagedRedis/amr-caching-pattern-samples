@@ -208,6 +208,12 @@ infra/               Bicep (Container Apps, Azure SQL, Azure Managed Redis, Func
   the client disables TLS hostname verification; the CA certificate chain is still
   validated. Write-behind keys share the `{views}` hash tag so `RENAME` stays on one
   shard.
+- **Redis authentication:** to match its companion article, this sample uses a minimal
+  custom `CredentialProvider` that fetches a Microsoft Entra token whenever a
+  connection opens, with the identity's object ID (`REDIS_USER_OBJECT_ID`) as the Redis
+  username. For long-running production apps, use
+  [redis-entraid](https://github.com/redis/redis-py-entraid), which refreshes tokens
+  automatically, as the Azure Cosmos DB sample does.
 - **Scheduled jobs:** the change-tracking sync and write-behind flush run on threads
   inside the web app (`RUN_JOBS=true`) to keep the sample to one deployable app. A
   short Redis lock makes sure only one replica runs each job per interval. In
