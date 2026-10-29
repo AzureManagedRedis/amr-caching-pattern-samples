@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: cosmos-db-retail-cache-sample
+metadata:
+  template: cosmos-db-retail-cache-sample@0.1.0
+services:
+  web:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: .
+      remoteBuild: true
+  func:
+    project: ./functions
+    language: python
+    host: function

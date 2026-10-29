@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Contoso Outdoors{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <header class="site-header">
+        <div class="wrap">
+            <a class="brand" href="/">CONTOSO<span>outdoors</span></a>
+            <nav class="badges">
+                <a class="badge badge-link" href="/stats">View stats</a>
+                <span class="badge">Azure SQL Database</span>
+                <span class="badge badge-redis">Azure Managed Redis</span>
+            </nav>
+        </div>
+    </header>
+    <main class="wrap">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="site-footer">
+        <div class="wrap">
+            Retail cache sample &middot; caching patterns for Azure SQL Database
+        </div>
+    </footer>
+</body>
+</html>
