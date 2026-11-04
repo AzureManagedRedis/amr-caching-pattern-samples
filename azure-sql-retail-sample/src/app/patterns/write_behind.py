@@ -12,8 +12,7 @@ from ..db import get_db
 PENDING = "{views}:pending"    # New views collect here
 FLUSHING = "{views}:flushing"  # The batch being written to the database
 
-# Add each product's count to its total. Insert a row the first time a product is
-# viewed, and skip products that no longer exist.
+# Add each product's count to its total. Insert a row on its first view; skip deleted products.
 UPSERT_VIEWS_SQL = """
 MERGE dbo.ProductStats WITH (HOLDLOCK) AS t
 USING (SELECT j.ProductId, j.Views
@@ -31,8 +30,7 @@ def record_view(product_id: int):
 
 
 def flush_views():
-    # Runs on a schedule.
-    # 1. If the last flush failed, its batch is still in FLUSHING, so retry it.
+    # Runs on a schedule. 1. If the last flush failed, retry its batch in FLUSHING.
     #    Otherwise, move the pending counts to FLUSHING. New views start a fresh PENDING.
     if not cache.exists(FLUSHING):
         if not cache.exists(PENDING):

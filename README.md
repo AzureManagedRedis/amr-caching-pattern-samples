@@ -35,7 +35,7 @@ What each sample demonstrates for each pattern:
 | Cache-aside | Product pages | Product pages | Category listings, product pages |
 | Reference-data prefetching | Categories, brands | Categories (SQL change tracking) | Categories, shipping options, store settings (change feed) |
 | Write-through | Price updates | Price updates | Price updates |
-| Event-driven | Order status: the app publishes order events to a Redis Stream, and a worker updates the cached status | Order status: the Azure Functions SQL trigger deletes the cached status when any writer changes the order | Products changed by other systems: the Azure Functions trigger for Azure Cosmos DB refreshes the cached product |
+| Event-driven | Order status: the app publishes order events to a Redis Stream, and a worker updates the cached status | Order status: the Azure Functions SQL trigger deletes the cached status when any writer changes the order | Order status: the Azure Functions trigger for Azure Cosmos DB writes the new status to the cached key when any writer changes the order |
 | Write-behind | | Product view counts | |
 | Sorted-set ranking | | | Best sellers |
 | Session and state offload | | | Shopping cart |

@@ -19,8 +19,7 @@ def load_categories():
         version = cursor.fetchone()[0]
         cursor.execute("SELECT CategoryId, Name FROM dbo.Categories;")
         rows = cursor.fetchall()
-    # 1. Remove the saved version first. If the reload stops partway,
-    #    the next sync finds no version and reloads everything.
+    # 1. Remove the saved version first. If this reload stops partway, the next sync reloads everything.
     cache.delete(SYNC_KEY)
     # 2. Replace the hash (CategoryId -> Name).
     pipe = cache.pipeline()
@@ -51,8 +50,7 @@ def sync_categories():
             (int(last),),
         )
         changes = cursor.fetchall()
-        # Cleanup can remove old change history while the changes are read.
-        # Check again: if the saved version is now too old, reload everything.
+        # Cleanup can remove change history mid-read. If the version is now too old, reload everything.
         cursor.execute("SELECT CHANGE_TRACKING_MIN_VALID_VERSION(OBJECT_ID('dbo.Categories'));")
         if int(last) < cursor.fetchone()[0]:
             load_categories()
@@ -65,8 +63,7 @@ def sync_categories():
         else:
             pipe.hset(CATEGORIES_KEY, str(ch.CategoryId), ch.Name)
     pipe.execute()
-    # Save the version only after the changes are applied. If the batch fails,
-    # the next run applies the same changes again, which is safe.
+    # Save the version last. If the batch fails, the next run safely reapplies the same changes.
     cache.set(SYNC_KEY, current)
     if changes:
         print(f"[sync] applied {len(changes)} category change(s)", flush=True)
