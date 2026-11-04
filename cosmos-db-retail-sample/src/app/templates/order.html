@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Order {{ order_id[:8] }} &middot; Contoso Outdoors{% endblock %}
+{% block content %}
+<a class="back" href="/">&larr; Catalog</a>
+{% if not status %}
+<p class="empty">Order not found. <a href="/">Back to catalog</a>.</p>
+{% else %}
+<section class="order">
+    <h1>Order <code>{{ order_id[:8] }}</code></h1>
+    {% if placed %}
+    <p class="update-banner">Order saved to Azure Cosmos DB, and your cart was removed from Redis. The best-sellers ranking updates from the change feed within seconds. <a href="/bestsellers">View best sellers</a>.</p>
+    {% endif %}
+    <p class="status-line">Status: <strong id="status">{{ status }}</strong></p>
+    <p id="badge" class="cache-badge cache-{{ source }}">
+        {% if source == 'cache' %}Served from Redis cache{% else %}Served from Azure Cosmos DB{% endif %}
+        &middot; {{ '%.1f' | format(elapsed_ms) }} ms
+    </p>
+
+    {% if status == 'placed' %}
+    <details class="admin" open>
+        <summary>Ship the order from the warehouse (event-driven refresh)</summary>
+        <form action="/orders/{{ order_id }}/ship" method="post">
+            <button type="submit" class="btn btn-ghost">Ship order</button>
+        </form>
+        <small>Simulates the warehouse system, which updates Azure Cosmos DB only and never touches Redis. The Azure Functions trigger for Azure Cosmos DB reads the change feed and writes the new status to this order's cached key within seconds.</small>
+    </details>
+    {% endif %}
+
+    {% if shipped %}
+    <p class="update-banner" id="shipped-note">
+        {% if status == 'shipped' %}
+        The change feed function already wrote "shipped" to the cached status, so this read came from Redis.
+        {% else %}
+        Shipped in Azure Cosmos DB only, so the cache still holds "placed". When the change feed function writes the new status, the next read returns "shipped" from the cache.
+        {% endif %}
+    </p>
+    {% endif %}
+    {% if status == 'placed' %}
+    <p class="stock">This page reads the status every 2 seconds, like a shopper checking their order.</p>
+    {% endif %}
+</section>
+
+{% if status == 'placed' %}
+<script>
+const started = Date.now();
+async function poll() {
+    const res = await fetch("/api/orders/{{ order_id }}");
+    const data = await res.json();
+    document.getElementById("status").textContent = data.status;
+    const badge = document.getElementById("badge");
+    badge.className = "cache-badge cache-" + data.source;
+    badge.textContent = (data.source === "cache" ? "Served from Redis cache" : "Served from Azure Cosmos DB") + " \u00b7 " + data.elapsed_ms.toFixed(1) + " ms";
+    const note = document.getElementById("shipped-note");
+    if (data.status !== "placed") {
+        if (note) note.textContent = "The change feed function wrote \"" + data.status + "\" to the cached status about " + Math.round((Date.now() - started) / 1000) + " seconds after shipping.";
+        document.querySelector("details.admin")?.remove();
+    } else if (Date.now() - started < 300000) {
+        setTimeout(poll, 2000);
+    }
+}
+setTimeout(poll, 2000);
+</script>
+{% endif %}
+{% endif %}
+{% endblock %}

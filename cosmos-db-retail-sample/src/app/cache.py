@@ -32,7 +32,7 @@ def _create() -> RedisCluster:
         host=settings.redis_host,  # <name>.<region>.redis.azure.net
         port=settings.redis_port,
         ssl=True,
-        ssl_check_hostname=False,  # Cluster nodes are addressed by IP. The certificate is still validated.
+        ssl_check_hostname=False,  # Cluster redirects use node IPs; the certificate is still verified.
         credential_provider=create_from_default_azure_credential(("https://redis.azure.com/.default",)),
         decode_responses=True,
     )

@@ -83,8 +83,7 @@ resource cosmosDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-11-15
 // The article's containers. Data-plane roles can't create databases or containers,
 // so the template creates them, including `leases` for the change feed triggers.
 var containers = [
-  // TTL on with no default (-1), so soft-deleted products can expire.
-  { name: 'products', partitionKey: '/categoryId', defaultTtl: -1 }
+  { name: 'products', partitionKey: '/categoryId', defaultTtl: 0 }
   { name: 'orders', partitionKey: '/customerId', defaultTtl: 0 }
   { name: 'reference', partitionKey: '/type', defaultTtl: 0 }
   { name: 'leases', partitionKey: '/id', defaultTtl: 0 }
