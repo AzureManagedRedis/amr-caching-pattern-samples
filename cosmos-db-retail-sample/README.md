@@ -14,7 +14,8 @@ matches a step in that article.
 
 ## Patterns
 
-How each caching pattern maps to this storefront:
+How the caching patterns (see the [repository README](../README.md#caching-patterns)
+for what each one is) map to this storefront:
 
 | Pattern | Storefront feature | Azure Cosmos DB + Redis mechanism |
 | --- | --- | --- |
