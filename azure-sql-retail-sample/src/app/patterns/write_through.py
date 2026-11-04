@@ -10,8 +10,7 @@ from ..db import get_db
 
 
 def update_price(product_id: int, new_price: float):
-    # 1. Save the new price in the database. OUTPUT hands back the new price
-    #    in the same call, so there's no need to read it again.
+    # 1. Save the new price. OUTPUT returns it in the same call, so there's no need to read it again.
     with get_db() as conn, conn.cursor() as cursor:
         cursor.execute(
             """
@@ -29,21 +28,17 @@ def update_price(product_id: int, new_price: float):
     if row is None:
         return
 
-    # 3. Reaching this line means the product exists and its price changed.
-    #    Now check whether this product is in the cache.
+    # 3. The product exists and its price changed. Check whether it's in the cache.
     key = f"product:{product_id}"
     cached = cache.get(key)
     product = json.loads(cached) if cached is not None else None
 
-    # 4. Not cached, or cached as "not found" (now wrong, since the product exists):
-    #    delete the key. The next read loads the product fresh from the database.
+    # 4. Not cached, or cached as "not found" (now wrong): delete the key so the next read reloads it.
     if product is None:
         cache.delete(key)
         return
 
-    # 5. Cached: replace the old price with the new one. keepttl=True keeps the
-    #    original expiry time, so the entry still refreshes on schedule.
-    #    xx=True writes only if the key still exists, so a key that expired or
-    #    was deleted after the read isn't recreated without an expiry.
+    # 5. Cached: update the price. keepttl=True keeps the original expiry. xx=True skips a
+    #    key that expired or was deleted after the read, so it isn't recreated without an expiry.
     product["price"] = float(row.Price)
     cache.set(key, json.dumps(product), keepttl=True, xx=True)

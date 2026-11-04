@@ -230,6 +230,9 @@ infra/               Bicep (Container Apps, Azure SQL, Azure Managed Redis, Func
   short Redis lock makes sure only one replica runs each job per interval. In
   production, run them from a single scheduled job, such as a timer-triggered
   function.
+- **Order ownership:** the sample has no sign-in, and `dbo.Orders` has no customer
+  column, so any visitor can view or ship any order by its ID. A real app checks that
+  the order belongs to the signed-in customer before it returns the status.
 - **UI assets:** the catalog data and product images come from the MIT-licensed
   [dotnet/eShop](https://github.com/dotnet/eShop) sample, bundled under
   `src/app/static/img/`. Swap them by editing `PRODUCTS` in `seed.py`.
