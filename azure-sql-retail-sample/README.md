@@ -22,7 +22,7 @@ for what each one is) map to this storefront:
 | Cache-aside | Product detail pages | `GET`/`SET` with TTL, plus short-lived "not found" entries |
 | Reference-data prefetching | Category chips | Redis hash loaded at startup, kept current with SQL change tracking |
 | Write-through | Price updates | Update Azure SQL, then update the cached product |
-| Event-driven invalidation | Restock from the warehouse | Azure Functions SQL trigger deletes changed product keys |
+| Event-driven invalidation | Order status | Azure Functions SQL trigger deletes cached order statuses when the warehouse ships an order |
 | Write-behind | Product view counts | `HINCRBY` in Redis, batched `MERGE` into Azure SQL |
 
 ## Architecture
@@ -35,7 +35,7 @@ flowchart LR
     J[Scheduled jobs in web app] -->|change tracking sync, flush views| S
     J --> R
     S -->|change tracking| F[Function app: SQL trigger]
-    F -->|DEL product keys| R
+    F -->|DEL order status keys| R
 ```
 
 ## See the patterns in action
@@ -57,14 +57,19 @@ something you can do in the storefront.
   `SYNC_INTERVAL_SECONDS`. See [`prefetch.py`](src/app/patterns/prefetch.py).
 - **Write-through: price updates.** On a product page, expand **Update price
   (write-through)** and save. The app writes Azure SQL, then refreshes the cached
-  product, so the new price shows immediately. The SQL trigger also sees this change
-  and deletes the key a few seconds later; the next read reloads it from the
-  database. See [`write_through.py`](src/app/patterns/write_through.py).
-- **Event-driven invalidation: restock.** On a product page, expand **Restock from
-  the warehouse** and click **Restock**. This updates Azure SQL directly and doesn't
-  touch Redis, the way a batch job or another service would. The Azure Functions
-  SQL trigger sees the change through change tracking and deletes
-  `product:<id>`, so the next read loads the new stock. See
+  product, so the new price shows immediately. See
+  [`write_through.py`](src/app/patterns/write_through.py).
+- **Event-driven invalidation: order status.** On a product page, expand **Place an
+  order** and submit. The order page caches the status ("Processing") in
+  `order:<id>:status` with a long TTL (`ORDER_STATUS_TTL_SECONDS`, one hour by
+  default) and shows whether each read came from Redis or Azure SQL. Click **Ship
+  order**. This updates `dbo.Orders` in Azure SQL directly and doesn't touch Redis,
+  the way a warehouse system would. The Azure Functions SQL trigger sees the change
+  through change tracking and deletes `order:<id>:status`, usually within a few
+  seconds, so the next read loads "Shipped" from the database instead of serving the
+  cached "Processing" for up to an hour. If the trigger hasn't run yet when the page
+  reloads, the page shows the cached status and checks again every 2 seconds until
+  "Shipped" appears. See
   [`invalidation.py`](src/app/patterns/invalidation.py) and
   [`functions/function_app.py`](functions/function_app.py).
 - **Write-behind: view counts.** Every product page view increments a counter in
@@ -162,10 +167,11 @@ $env:AUTO_SEED = "false"
 uvicorn app.main:app --app-dir src --reload --reload-dir src
 ```
 
-`RUN_JOBS=false` and `AUTO_SEED=false` are recommended locally because the deployed
-app already seeded the shared database and runs the scheduled jobs. The SQL trigger
-runs in the deployed function app, so restocks from your local app are still
-invalidated.
+Your local app uses the deployed Azure SQL database and Redis cache. With
+`RUN_JOBS=false`, the deployed web app keeps running the category sync and view-count
+flush, and the deployed function app keeps invalidating cached order statuses. The
+`[jobs] disabled (RUN_JOBS=false)` message at startup is expected. `AUTO_SEED=false`
+is recommended because the deployed app already seeded the shared database.
 
 Open http://localhost:8000 and try the patterns above. (You can also copy
 `.env.example` to `.env` and fill in the same values instead of setting environment
@@ -195,7 +201,7 @@ src/app/
   patterns/          The caching patterns (the teaching core)
   templates/, static/  Self-contained storefront UI
 functions/
-  function_app.py    Azure SQL trigger that invalidates product keys
+  function_app.py    Azure SQL trigger that invalidates cached order statuses
   shared/cache.py    Same Redis client as the web app
 infra/               Bicep (Container Apps, Azure SQL, Azure Managed Redis, Functions)
 ```
