@@ -12,7 +12,8 @@ then:
 
 The app's managed identity is the server's Microsoft Entra admin, which lets it
 do all of this. In production, run these scripts once from a deployment pipeline
-and give the app only the grants in the article's "Prepare the database" section.
+and give each identity only the grants it needs, like the ones this script gives
+the function identity and the developer.
 
 It runs automatically on startup (AUTO_SEED=true). You can also run it manually:
     python -m app.seed
