@@ -26,19 +26,21 @@ Every sample draws from the same vocabulary of patterns:
 | Sorted-set ranking | The cache maintains a ranking incrementally as changes arrive, instead of recomputing it on every read. |
 | Session and state offload | Transient state, such as shopping carts and user sessions, lives in the cache instead of the database. |
 
-Which sample shows which pattern:
+### Patterns in each sample
 
-| Pattern | Postgres | Azure SQL | Azure Cosmos DB |
+What each sample demonstrates for each pattern:
+
+| Pattern | Azure Database for PostgreSQL | Azure SQL Database | Azure Cosmos DB |
 | --- | --- | --- | --- |
-| Cache-aside | ✓ | ✓ | ✓ |
-| Reference-data prefetching | ✓ | ✓ | ✓ |
-| Write-through | ✓ | ✓ | ✓ |
-| Event-driven | Redis Streams worker | Functions SQL trigger (invalidate) | Functions Azure Cosmos DB trigger (refresh) |
-| Write-behind | | ✓ | |
-| Sorted-set ranking | | | ✓ |
-| Session and state offload | | | ✓ |
+| Cache-aside | Product pages | Product pages | Category listings, product pages |
+| Reference-data prefetching | Categories, brands | Categories (SQL change tracking) | Categories, shipping options, store settings (change feed) |
+| Write-through | Price updates | Price updates | Price updates |
+| Event-driven | Order status: the app publishes order events to a Redis Stream, and a worker updates the cached status | Order status: the Azure Functions SQL trigger deletes the cached status when any writer changes the order | Products changed by other systems: the Azure Functions trigger for Azure Cosmos DB refreshes the cached product |
+| Write-behind | | Product view counts | |
+| Sorted-set ranking | | | Best sellers |
+| Session and state offload | | | Shopping cart |
 
-Each sample's README shows how these patterns map to that database and application.
+For the full walkthrough of each pattern, see the sample's README.
 
 ## Using a sample
 
