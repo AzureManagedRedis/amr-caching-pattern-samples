@@ -32,6 +32,8 @@ def place_order(product_id: int, quantity: int) -> int:
 
 def get_order_status(order_id: int) -> tuple[str | None, str]:
     """Return (status, source). source is "cache" or "database"."""
+    # This sample has no sign-in. In a real store, check that the order belongs to the
+    # signed-in shopper before you return its status, from the cache or the database.
     # 1. Try the cache first.
     key = status_key(order_id)
     status = cache.get(key)
