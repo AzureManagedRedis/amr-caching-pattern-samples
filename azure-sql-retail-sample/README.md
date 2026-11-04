@@ -216,7 +216,8 @@ infra/               Bicep (Container Apps, Azure SQL, Azure Managed Redis, Func
   connects with a cluster-aware client (`redis.cluster.RedisCluster`), which routes
   each key to its shard. Because OSS cluster clients connect to shard nodes by IP,
   the client disables TLS hostname verification; the CA certificate chain is still
-  validated. Write-behind keys share the `{views}` hash tag so `RENAME` stays on one
+  validated. If you need hostname verification, use the Enterprise clustering policy,
+  where all connections use the cache hostname. Write-behind keys share the `{views}` hash tag so `RENAME` stays on one
   shard.
 - **Redis authentication:** to match its companion article, this sample uses a minimal
   custom `CredentialProvider` that fetches a Microsoft Entra token whenever a

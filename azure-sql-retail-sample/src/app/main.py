@@ -30,7 +30,9 @@ templates = Jinja2Templates(directory=str(BASE / "templates"))
 async def lifespan(app: FastAPI):
     if settings.auto_seed:
         seed.ensure_seeded()  # create schema, grant the function identity, seed the catalog
-    prefetch.load_categories()  # reference-data prefetching at startup
+    # Reference-data prefetching at startup. Use the sync job's lock so this load
+    # can't overlap a sync on another replica. If the lock is held, the cache is already loaded.
+    jobs.run_once("sync-categories", settings.sync_interval_seconds, prefetch.load_categories)
 
     stop = jobs.start() if settings.run_jobs else None
     if stop is None:

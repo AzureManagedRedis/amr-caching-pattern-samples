@@ -14,7 +14,7 @@ from .config import settings
 from .patterns import prefetch, write_behind
 
 
-def _run_once(name: str, interval: int, job) -> None:
+def run_once(name: str, interval: int, job) -> None:
     # The lock expires just before the next run, so if a replica stops, another takes over.
     if cache.set(f"lock:job:{name}", "1", nx=True, ex=max(interval - 1, 1)):
         job()
@@ -23,7 +23,7 @@ def _run_once(name: str, interval: int, job) -> None:
 def _loop(stop: threading.Event, name: str, interval: int, job) -> None:
     while not stop.wait(interval):
         try:
-            _run_once(name, interval, job)
+            run_once(name, interval, job)
         except Exception:
             print(f"[{name}] failed; retrying next interval:", flush=True)
             traceback.print_exc()
