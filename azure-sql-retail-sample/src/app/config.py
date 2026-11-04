@@ -33,6 +33,8 @@ class Settings:
     # Caching behavior
     product_ttl_seconds: int = int(os.environ.get("PRODUCT_TTL_SECONDS", "300"))
     not_found_ttl_seconds: int = int(os.environ.get("NOT_FOUND_TTL_SECONDS", "30"))
+    # Long on purpose: without the SQL trigger, a shipped order would show "Processing" this long.
+    order_status_ttl_seconds: int = int(os.environ.get("ORDER_STATUS_TTL_SECONDS", "3600"))
     sync_interval_seconds: int = int(os.environ.get("SYNC_INTERVAL_SECONDS", "30"))
     flush_interval_seconds: int = int(os.environ.get("FLUSH_INTERVAL_SECONDS", "15"))
 
