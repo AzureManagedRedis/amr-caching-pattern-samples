@@ -34,8 +34,8 @@ class Settings:
     product_ttl_seconds: int = int(os.environ.get("PRODUCT_TTL_SECONDS", "300"))
     not_found_ttl_seconds: int = int(os.environ.get("NOT_FOUND_TTL_SECONDS", "30"))
     cart_ttl_seconds: int = int(os.environ.get("CART_TTL_SECONDS", "1800"))
-    # How long a soft-deleted product stays in Azure Cosmos DB before TTL removes it.
-    soft_delete_ttl_seconds: int = int(os.environ.get("SOFT_DELETE_TTL_SECONDS", "3600"))
+    # Long on purpose: without the change feed function, a shipped order would show "placed" this long.
+    order_status_ttl_seconds: int = int(os.environ.get("ORDER_STATUS_TTL_SECONDS", "3600"))
 
     auto_seed: bool = _bool("AUTO_SEED", "true")
 

@@ -2,8 +2,8 @@
 
 Matches step 3 of "Optimize costs by using a cache with Azure Cosmos DB for
 NoSQL". The logic is the article's: try Redis, on a miss read Azure Cosmos DB in
-one partition, then populate the cache with a jittered TTL. Missing and
-soft-deleted products are cached briefly as "not found". The only additions are
+one partition, then populate the cache with a jittered TTL. Missing products
+are cached briefly as "not found". The only additions are
 `brand` in the listing projection (the storefront card shows it) and a `source`
 value so the page can show where the data came from.
 """
@@ -35,12 +35,11 @@ def get_category_page(category_id: str) -> tuple[list[dict], str]:
     if cached is not None:
         return json.loads(cached), "cache"
 
-    # 2. On a miss, query Azure Cosmos DB in one partition. Skip soft-deleted products.
+    # 2. On a miss, query Azure Cosmos DB in one partition.
     items = list(products.query_items(
         query=(
             "SELECT c.id, c.categoryId, c.name, c.brand, c.price, c.rating, c.imageUrl "
             "FROM c WHERE c.categoryId = @categoryId "
-            "AND (NOT IS_DEFINED(c.isDeleted) OR c.isDeleted = false) "
             "ORDER BY c.rating DESC OFFSET 0 LIMIT 24"
         ),
         parameters=[{"name": "@categoryId", "value": category_id}],
@@ -67,8 +66,8 @@ def get_product(category_id: str, product_id: str) -> tuple[dict | None, str]:
     except CosmosResourceNotFoundError:
         item = None
 
-    # 3. Cache "not found" briefly so that repeated requests for a missing or deleted ID don't cost RUs.
-    if item is None or item.get("isDeleted"):
+    # 3. Cache "not found" briefly so that repeated requests for a missing ID don't cost RUs.
+    if item is None:
         cache.set(key, json.dumps(None), ex=NOT_FOUND_TTL)
         return None, "database"
 

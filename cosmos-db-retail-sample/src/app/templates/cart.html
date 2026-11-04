@@ -6,9 +6,6 @@
     <h1>Your cart</h1>
     <p class="desc">Your cart lives in the Redis hash <code>cart:&lt;user&gt;</code> and expires after {{ cart_ttl_minutes }} minutes of inactivity. Adding items costs no RUs. Checkout reads current prices from Azure Cosmos DB and writes one order.</p>
 
-    {% if order %}
-    <p class="update-banner">Order <code>{{ order }}</code> saved to Azure Cosmos DB. The best-sellers ranking updates from the change feed within seconds. <a href="/bestsellers">View best sellers</a>.</p>
-    {% endif %}
     {% if error %}
     <p class="update-banner">{{ error }}</p>
     {% endif %}
@@ -45,7 +42,7 @@
         <button type="submit" class="btn">Check out</button>
         <small>The checkout ID is an idempotency key: submitting this form twice creates one order.</small>
     </form>
-    {% elif not order %}
+    {% else %}
     <p class="empty">Your cart is empty. <a href="/">Browse the catalog</a>.</p>
     {% endif %}
 </section>

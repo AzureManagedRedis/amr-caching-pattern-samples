@@ -1,8 +1,8 @@
 """Sample catalog and reference data.
 
 `ensure_seeded` is idempotent and safe to call on every startup. It only upserts
-items that don't exist yet, so it doesn't undo price changes, renames, or soft
-deletes made while the app runs. It needs only the Cosmos DB Built-in Data
+items that don't exist yet, so it doesn't undo price changes or renames made
+while the app runs. It needs only the Cosmos DB Built-in Data
 Contributor role: the database and containers come from the Bicep template,
 because a data-plane role can't create them, and this script grants nothing.
 

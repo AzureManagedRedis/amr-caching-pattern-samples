@@ -23,7 +23,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import seed
 from .config import settings
-from .patterns import cache_aside, cart, external_writes, prefetch, ranking, write_through
+from .patterns import cache_aside, cart, order_status, prefetch, ranking, write_through
 
 BASE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE / "templates"))
@@ -98,7 +98,7 @@ def index(request: Request, category: str | None = None, renamed: bool = False):
 @app.get("/product/{category_id}/{product_id}", response_class=HTMLResponse)
 def product_page(
     request: Request, category_id: str, product_id: str,
-    updated: bool = False, restocked: bool = False, added: bool = False,
+    updated: bool = False, added: bool = False,
 ):
     start = time.perf_counter()
     product, source = cache_aside.get_product(category_id, product_id)  # cache-aside
@@ -113,7 +113,6 @@ def product_page(
             "source": source,
             "elapsed_ms": elapsed_ms,
             "updated": updated,
-            "restocked": restocked,
             "added": added,
             "cart_count": _cart_count(request),
         },
@@ -125,18 +124,6 @@ def product_page(
 def set_price(category_id: str, product_id: str, price: float = Form(...)):
     write_through.update_price(category_id, product_id, round(price, 2))  # write-through
     return RedirectResponse(url=f"/product/{category_id}/{product_id}?updated=1", status_code=303)
-
-
-@app.post("/product/{category_id}/{product_id}/restock")
-def restock(category_id: str, product_id: str, quantity: int = Form(10)):
-    external_writes.restock(category_id, product_id, quantity)  # Azure Cosmos DB only; the change feed refreshes
-    return RedirectResponse(url=f"/product/{category_id}/{product_id}?restocked=1", status_code=303)
-
-
-@app.post("/product/{category_id}/{product_id}/delete")
-def soft_delete(category_id: str, product_id: str):
-    external_writes.soft_delete(category_id, product_id)  # Azure Cosmos DB only; the change feed deletes the key
-    return RedirectResponse(url=f"/?category={category_id}", status_code=303)
 
 
 @app.post("/categories/rename")
@@ -162,7 +149,7 @@ def _cart_lines(user_id: str) -> list[dict]:
 
 
 @app.get("/cart", response_class=HTMLResponse)
-def cart_page(request: Request, order: str | None = None, error: str | None = None):
+def cart_page(request: Request, error: str | None = None):
     lines = _cart_lines(request.state.user_id)
     store = {i["id"]: i for i in prefetch.get_reference("config")}.get("store", {})
     return templates.TemplateResponse(
@@ -174,7 +161,6 @@ def cart_page(request: Request, order: str | None = None, error: str | None = No
             "shipping": prefetch.get_reference("shipping"),  # reference data from Redis
             "store": store,
             "checkout_id": uuid.uuid4().hex,  # idempotency key, generated once per checkout attempt
-            "order": order,
             "error": error,
             "cart_count": sum(line["quantity"] for line in lines),
             "cart_ttl_minutes": settings.cart_ttl_seconds // 60,
@@ -190,7 +176,35 @@ def checkout(request: Request, checkout_id: str = Form(...)):
         order = cart.checkout(user_id, user_id, checkout_id)
     except ValueError as exc:
         return RedirectResponse(url=f"/cart?error={quote(str(exc))}", status_code=303)
-    return RedirectResponse(url=f"/cart?order={order['id']}", status_code=303)
+    return RedirectResponse(url=f"/orders/{order['id']}?placed=1", status_code=303)
+
+
+@app.get("/orders/{order_id}", response_class=HTMLResponse)
+def order_page(request: Request, order_id: str, placed: bool = False, shipped: bool = False):
+    start = time.perf_counter()
+    # Cache-aside on the order status. The anonymous user ID is the orders partition key.
+    status, source = order_status.get_order_status(request.state.user_id, order_id)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    return templates.TemplateResponse(
+        request,
+        "order.html",
+        {
+            "order_id": order_id,
+            "status": status,
+            "source": source,
+            "elapsed_ms": elapsed_ms,
+            "placed": placed,
+            "shipped": shipped,
+            "cart_count": _cart_count(request),
+        },
+        status_code=200 if status is not None else 404,
+    )
+
+
+@app.post("/orders/{order_id}/ship")
+def ship_order(request: Request, order_id: str):
+    order_status.ship_order(request.state.user_id, order_id)  # Azure Cosmos DB only; the change feed refreshes
+    return RedirectResponse(url=f"/orders/{order_id}?shipped=1", status_code=303)
 
 
 @app.get("/bestsellers", response_class=HTMLResponse)
@@ -223,6 +237,13 @@ def product_api(category_id: str, product_id: str):
 @app.get("/api/reference/{ref_type}")
 def reference_api(ref_type: str):
     return prefetch.get_reference(ref_type)
+
+
+@app.get("/api/orders/{order_id}")
+def order_status_api(request: Request, order_id: str):
+    start = time.perf_counter()
+    status, source = order_status.get_order_status(request.state.user_id, order_id)
+    return {"source": source, "elapsed_ms": round((time.perf_counter() - start) * 1000, 1), "status": status}
 
 
 @app.get("/api/bestsellers")
