@@ -6,7 +6,8 @@ while the app runs. It needs only the Cosmos DB Built-in Data
 Contributor role: the database and containers come from the Bicep template,
 because a data-plane role can't create them, and this script grants nothing.
 
-It runs automatically on startup (AUTO_SEED=true). You can also run it manually:
+It runs automatically on startup (AUTO_SEED=true). You can also run it manually,
+which also reloads every reference hash, for example after you delete reference items:
     python -m app.seed
 """
 from .db import products, reference
@@ -101,5 +102,5 @@ def ensure_seeded() -> None:
 
 if __name__ == "__main__":
     ensure_seeded()
-    load_all()
+    load_all(force=True)
     print("Seed complete.")

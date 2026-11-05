@@ -47,7 +47,8 @@ def get_category_page(category_id: str) -> tuple[list[dict], str]:
     ))
 
     # 3. Populate the cache with a TTL, then return.
-    cache.set(key, json.dumps(items), ex=CATEGORY_TTL + random.randint(0, 30))  # jitter avoids synchronized expiry
+    ttl = CATEGORY_TTL + random.randint(0, 30)  # jitter avoids synchronized expiry
+    cache.set(key, json.dumps(items), ex=ttl)
     return items, "database"
 
 
@@ -73,5 +74,6 @@ def get_product(category_id: str, product_id: str) -> tuple[dict | None, str]:
 
     # 4. Populate the cache with a TTL, then return.
     product = clean(item)
-    cache.set(key, json.dumps(product), ex=PRODUCT_TTL + random.randint(0, 60))
+    ttl = PRODUCT_TTL + random.randint(0, 60)  # jitter avoids synchronized expiry
+    cache.set(key, json.dumps(product), ex=ttl)
     return product, "database"
