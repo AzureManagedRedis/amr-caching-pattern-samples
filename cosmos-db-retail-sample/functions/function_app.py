@@ -74,9 +74,7 @@ def update_bestsellers(orders: func.DocumentList) -> None:
         print(f"[orders] counted order {order['id']}", flush=True)
 
 
-# Step 4: keep the prefetched reference data current from the change feed on the
-# reference container. For each changed item, write the same id, name, and data
-# properties that load_reference stores, with HSET ref:{type} {id}.
+# Step 4 (the article's code): invoked automatically when items in the reference container change
 @app.cosmos_db_trigger(
     arg_name="items",
     database_name="retail",
@@ -88,6 +86,7 @@ def update_bestsellers(orders: func.DocumentList) -> None:
 )
 def refresh_reference(items: func.DocumentList) -> None:
     from shared.cache import cache
+    # Write each changed item with the same properties that load_reference stores.
     pipe = cache.pipeline()
     for doc in items:
         item = dict(doc)

@@ -53,7 +53,9 @@ something you can do in the storefront.
   don't cost RUs. See [`cache_aside.py`](src/app/patterns/cache_aside.py).
 - **Reference-data prefetching: category chips.** Categories, shipping options, and
   store settings are loaded from the `reference` container into the Redis hashes
-  `ref:category`, `ref:shipping`, and `ref:config` at startup, with no TTL. On the
+  `ref:category`, `ref:shipping`, and `ref:config` at startup, with no TTL. Only one
+  app replica loads at a time, and a hash that's already cached isn't reloaded, so a
+  restart can't overwrite a newer value from the change feed. On the
   home page, expand **Rename a category** and save. The rename goes only to Azure
   Cosmos DB; the `refresh_reference` function reads it from the change feed and
   writes it with `HSET`, so the chip changes within seconds. See
