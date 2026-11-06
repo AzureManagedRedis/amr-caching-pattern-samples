@@ -64,7 +64,7 @@ def update_bestsellers(orders: func.DocumentList) -> None:
         if order.get("status") == "cancelled":
             continue
         # 2. Count each order once: the first time any version of it appears in the feed.
-        if not cache.set(f"order:{order['id']}:counted", 1, nx=True, ex=7 * 24 * 3600):
+        if not cache.set(f"order:{order['customerId']}:{order['id']}:counted", 1, nx=True, ex=7 * 24 * 3600):
             continue
         # 3. Add each line's quantity to the product's score.
         pipe = cache.pipeline()
@@ -82,10 +82,11 @@ def update_bestsellers(orders: func.DocumentList) -> None:
     connection="CosmosDBConnection",
     lease_container_name="leases",
     lease_container_prefix="reference-",      # Keeps these checkpoints separate from the orders functions
+    start_from_beginning=True,                # First run only: replay so changes made during the initial load aren't missed
     create_lease_container_if_not_exists=False,
 )
 def refresh_reference(items: func.DocumentList) -> None:
-    from shared.cache import cache
+    from shared.cache import cache             # The RedisCluster client from Step 2, in shared/cache.py
     # Write each changed item with the same properties that load_reference stores.
     pipe = cache.pipeline()
     for doc in items:
