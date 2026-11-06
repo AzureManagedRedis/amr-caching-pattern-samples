@@ -1,7 +1,7 @@
 """Azure Managed Redis client for the function app.
 
 This is the Redis client from step 2 of "Optimize costs by using a cache with
-Azure Cosmos DB for NoSQL". The functions don't need an Azure Cosmos DB client:
+Azure Cosmos DB". The functions don't need an Azure Cosmos DB client:
 the trigger delivers the changed items. In Azure, redis-entraid gets tokens from
 `DefaultAzureCredential`, which uses the function's user-assigned identity
 (AZURE_CLIENT_ID), and reads the Redis username (the identity's object ID) from

@@ -6,7 +6,7 @@ authenticate with **Microsoft Entra ID** (managed identity), so there are no key
 passwords in the deployed app.
 
 This sample is the runnable companion to the Microsoft Learn article
-*Optimize costs by using a cache with Azure Cosmos DB for NoSQL*. Each pattern module
+*Optimize costs by using a cache with Azure Cosmos DB*. Each pattern module
 matches a step in that article.
 
 > Part of [amr-caching-pattern-samples](../README.md). Run the commands in this README
