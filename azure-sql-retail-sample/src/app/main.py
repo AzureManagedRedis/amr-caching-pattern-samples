@@ -12,7 +12,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -30,7 +30,9 @@ templates = Jinja2Templates(directory=str(BASE / "templates"))
 async def lifespan(app: FastAPI):
     if settings.auto_seed:
         seed.ensure_seeded()  # create schema, grant the function identity, seed the catalog
-    prefetch.load_categories()  # reference-data prefetching at startup
+    # Reference-data prefetching at startup. Use the sync job's lock so this load
+    # can't overlap a sync on another replica. If the lock is held, the cache is already loaded.
+    jobs.run_once("sync-categories", settings.sync_interval_seconds, prefetch.load_categories)
 
     stop = jobs.start() if settings.run_jobs else None
     if stop is None:
@@ -79,7 +81,7 @@ def index(request: Request, category: int | None = None, renamed: bool = False):
 
 
 @app.get("/product/{product_id}", response_class=HTMLResponse)
-def product_page(request: Request, product_id: int, updated: bool = False, restocked: bool = False):
+def product_page(request: Request, product_id: int, updated: bool = False):
     start = time.perf_counter()
     product, source = cache_aside.get_product(product_id)  # cache-aside
     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -93,7 +95,6 @@ def product_page(request: Request, product_id: int, updated: bool = False, resto
             "source": source,
             "elapsed_ms": elapsed_ms,
             "updated": updated,
-            "restocked": restocked,
             "pending_views": write_behind.pending_views().get(product_id, 0),
             "flush_interval": settings.flush_interval_seconds,
         },
@@ -107,15 +108,37 @@ def set_price(product_id: int, price: float = Form(...)):
     return RedirectResponse(url=f"/product/{product_id}?updated=1", status_code=303)
 
 
-@app.post("/product/{product_id}/restock")
-def restock(product_id: int, quantity: int = Form(10)):
-    invalidation.restock(product_id, quantity)  # external write; the SQL trigger invalidates
-    return RedirectResponse(url=f"/product/{product_id}?restocked=1", status_code=303)
+@app.post("/orders")
+def create_order(product_id: int = Form(...), quantity: int = Form(1)):
+    order_id = invalidation.place_order(product_id, max(1, min(quantity, 10)))
+    return RedirectResponse(url=f"/orders/{order_id}", status_code=303)
+
+
+@app.get("/orders/{order_id}", response_class=HTMLResponse)
+def order_page(request: Request, order_id: int, shipped: bool = False):
+    start = time.perf_counter()
+    status, source = invalidation.get_order_status(order_id)  # cache-aside on the order status
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    return templates.TemplateResponse(
+        request,
+        "order.html",
+        {"order_id": order_id, "status": status, "source": source, "elapsed_ms": elapsed_ms, "shipped": shipped},
+        status_code=200 if status is not None else 404,
+    )
+
+
+@app.post("/orders/{order_id}/ship")
+def ship_order(order_id: int):
+    invalidation.ship_order(order_id)  # external write; the SQL trigger invalidates
+    return RedirectResponse(url=f"/orders/{order_id}?shipped=1", status_code=303)
 
 
 @app.post("/categories/rename")
 def rename_category(category_id: int = Form(...), name: str = Form(...)):
-    prefetch.rename_category(category_id, name.strip()[:100])  # change tracking sync picks it up
+    name = name.strip()[:100]
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name can't be empty.")
+    prefetch.rename_category(category_id, name)  # change tracking sync picks it up
     return RedirectResponse(url="/?renamed=1", status_code=303)
 
 
@@ -142,6 +165,13 @@ def product_api(product_id: int):
 @app.get("/api/categories")
 def categories_api():
     return prefetch.get_categories()
+
+
+@app.get("/api/orders/{order_id}")
+def order_status_api(order_id: int):
+    start = time.perf_counter()
+    status, source = invalidation.get_order_status(order_id)
+    return {"source": source, "elapsed_ms": round((time.perf_counter() - start) * 1000, 1), "status": status}
 
 
 @app.get("/api/stats")

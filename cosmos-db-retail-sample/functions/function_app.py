@@ -1,69 +1,70 @@
 # Event-driven cache refresh with the Azure Functions trigger for Azure Cosmos DB.
 #
 # The trigger reads the change feed and calls these functions with every changed
-# item, no matter who changed it: the storefront, an import, or someone in Data
-# Explorer. Each function keeps a different part of the cache current:
+# item, no matter who changed it: the storefront, the simulated warehouse, or
+# someone in Data Explorer. Each function keeps a different part of the cache current:
 #
-# - refresh_products (step 6): refreshes cached products, deletes soft-deleted
-#   ones, and deletes the affected category listings.
-# - update_bestsellers (step 7): maintains the best-sellers sorted set.
-# - refresh_reference (step 4): keeps the prefetched reference-data hashes current.
+# - refresh_order_status (step 5): writes each changed order's status to its
+#   cached `order:<customerId>:<id>:status` key, if that key is cached.
+# - update_bestsellers (step 6): maintains the best-sellers sorted set.
+# - refresh_reference (an extra in this sample, not an article step): keeps the
+#   prefetched reference-data hashes current.
 #
 # All three share the `leases` container, which the Bicep template creates: with
-# only a data-plane role, the trigger can't create it. Each function uses its own
-# lease prefix so their checkpoints stay separate.
+# only a data-plane role, the trigger can't create it. The two functions on the
+# `orders` container use different lease prefixes so their checkpoints stay separate.
 #
 # Each function imports `shared.cache` inside its body, not at the top of this file.
 # The Python worker loads this file while its event loop is running, and the
 # redis-entraid credential provider blocks that loop while it requests the first
 # token, so the function host never starts. A synchronous function runs on a
 # separate thread, where the first token request completes normally.
-import json                                   # To serialize the changed items
+import json
 
-import azure.functions as func                # The Azure Functions Python library
+import azure.functions as func
 
-app = func.FunctionApp()                      # Registers the functions in this file
-
-
-# Step 6: run this function whenever items in the products container are created or updated.
-@app.cosmos_db_trigger(
-    arg_name="changes",                       # The parameter that receives the changed items
-    database_name="retail",
-    container_name="products",                # The container to watch
-    connection="CosmosDBConnection",          # App setting prefix for the account connection
-    lease_container_name="leases",            # Checkpoints, so the function resumes after a restart
-    create_lease_container_if_not_exists=False,
-)
-def refresh_products(changes: func.DocumentList) -> None:
-    from shared.cache import cache, clean  # cache from step 2, clean() from step 3
-    # 1. Refresh each changed product that's already cached, or delete it if it was soft-deleted.
-    pipe = cache.pipeline()
-    categories = set()
-    for doc in changes:
-        item = clean(dict(doc))
-        key = f"product:{item['categoryId']}:{item['id']}"
-        if item.get("isDeleted"):
-            pipe.delete(key)
-        else:
-            pipe.set(key, json.dumps(item), xx=True, keepttl=True)  # refresh only if cached
-        categories.add(item["categoryId"])
-    # 2. Delete the listing for each affected category. The next read rebuilds it.
-    for category_id in categories:
-        pipe.delete(f"category:{category_id}:top")
-    pipe.execute()
-    print(f"[products] refreshed {len(changes)} item(s) in {sorted(categories)}", flush=True)
+app = func.FunctionApp()
 
 
-# Step 7: run this function whenever items in the orders container are created or updated.
+# Step 5 (the article's code, plus the retry policy that the article recommends):
+# invoked automatically when items in the orders container change
 @app.cosmos_db_trigger(
     arg_name="orders",
     database_name="retail",
     container_name="orders",
     connection="CosmosDBConnection",
     lease_container_name="leases",
-    lease_container_prefix="bestsellers-",    # Keeps these checkpoints separate from step 6
     create_lease_container_if_not_exists=False,
 )
+@app.retry(strategy="exponential_backoff", max_retry_count="5",
+           minimum_interval="00:00:04", maximum_interval="00:15:00")
+def refresh_order_status(orders: func.DocumentList) -> None:
+    # The Redis client from Step 2, in shared/cache.py.
+    # Import it here, not at the top of the file, so the Functions host can start.
+    from shared.cache import cache
+    # Write each order's new status. xx=True skips orders that aren't cached,
+    # and keepttl=True keeps the original expiry.
+    pipe = cache.pipeline(transaction=False)
+    for order in orders:
+        pipe.set(f"order:{order['customerId']}:{order['id']}:status", order["status"], xx=True, keepttl=True)
+    pipe.execute()
+    print(f"[order-status] refreshed {len(orders)} order(s): "
+          + ", ".join(f"{o['id']}={o['status']}" for o in orders), flush=True)
+
+
+# Step 6 (the complete version of the article's snippet): invoked automatically
+# when items in the orders container change
+@app.cosmos_db_trigger(
+    arg_name="orders",
+    database_name="retail",
+    container_name="orders",
+    connection="CosmosDBConnection",
+    lease_container_name="leases",
+    lease_container_prefix="bestsellers-",    # Keeps these checkpoints separate from refresh_order_status
+    create_lease_container_if_not_exists=False,
+)
+@app.retry(strategy="exponential_backoff", max_retry_count="5",
+           minimum_interval="00:00:04", maximum_interval="00:15:00")
 def update_bestsellers(orders: func.DocumentList) -> None:
     from shared.cache import cache
     for doc in orders:
@@ -72,31 +73,39 @@ def update_bestsellers(orders: func.DocumentList) -> None:
         if order.get("status") == "cancelled":
             continue
         # 2. Count each order once: the first time any version of it appears in the feed.
-        if not cache.set(f"order:{order['id']}:counted", 1, nx=True, ex=7 * 24 * 3600):
+        #    The marker expires after 7 days to free memory, so an order that changes
+        #    after that is counted again. Use a longer expiry if orders change later.
+        marker = f"order:{order['customerId']}:{order['id']}:counted"
+        if not cache.set(marker, 1, nx=True, ex=7 * 24 * 3600):
             continue
         # 3. Add each line's quantity to the product's score.
-        pipe = cache.pipeline()
-        for line in order["lines"]:
-            pipe.zincrby("bestsellers", line["quantity"], f"{line['categoryId']}:{line['productId']}")
-        pipe.execute()
+        try:
+            pipe = cache.pipeline(transaction=False)
+            for line in order["lines"]:
+                pipe.zincrby("bestsellers", line["quantity"], f"{line['categoryId']}:{line['productId']}")
+            pipe.execute()
+        except Exception:
+            cache.delete(marker)  # Let the retry count this order
+            raise
         print(f"[orders] counted order {order['id']}", flush=True)
 
 
-# Step 4: keep the prefetched reference data current from the change feed on the
-# reference container. For each changed item, write the same id, name, and data
-# properties that load_reference stores, with HSET ref:{type} {id}.
+# Reference-data prefetching (an extra in this sample, not an article step):
+# invoked automatically when items in the reference container change
 @app.cosmos_db_trigger(
     arg_name="items",
     database_name="retail",
     container_name="reference",
     connection="CosmosDBConnection",
     lease_container_name="leases",
-    lease_container_prefix="reference-",      # Keeps these checkpoints separate from steps 6 and 7
+    lease_container_prefix="reference-",      # Keeps these checkpoints separate from the orders functions
+    start_from_beginning=True,                # First run only: replay so changes made during the initial load aren't missed
     create_lease_container_if_not_exists=False,
 )
 def refresh_reference(items: func.DocumentList) -> None:
-    from shared.cache import cache
-    pipe = cache.pipeline()
+    from shared.cache import cache             # The Redis client from Step 2, in shared/cache.py
+    # Write each changed item with the same properties that load_reference stores.
+    pipe = cache.pipeline(transaction=False)
     for doc in items:
         item = dict(doc)
         value = {"id": item["id"], "name": item["name"], "data": item.get("data")}

@@ -1,14 +1,16 @@
 """Sample catalog and reference data.
 
 `ensure_seeded` is idempotent and safe to call on every startup. It only upserts
-items that don't exist yet, so it doesn't undo price changes, renames, or soft
-deletes made while the app runs. It needs only the Cosmos DB Built-in Data
+items that don't exist yet, so it doesn't undo price changes or renames made
+while the app runs. It needs only the Cosmos DB Built-in Data
 Contributor role: the database and containers come from the Bicep template,
 because a data-plane role can't create them, and this script grants nothing.
 
-It runs automatically on startup (AUTO_SEED=true). You can also run it manually:
+It runs automatically on startup (AUTO_SEED=true). You can also run it manually,
+which also reloads every reference hash, for example after you delete reference items:
     python -m app.seed
 """
+from .cache import cache
 from .db import products, reference
 from .patterns.prefetch import load_all
 
@@ -66,11 +68,25 @@ def _reference_items() -> list[dict]:
     return items
 
 
-def _product_items() -> list[dict]:
+def _category_names() -> dict[str, str]:
+    """Current category names from the reference container, including any renames."""
+    return {
+        c["id"]: c["name"]
+        for c in reference.query_items(
+            query="SELECT c.id, c.name FROM c WHERE c.type = 'category'",
+            partition_key="category",
+        )
+    }
+
+
+def _product_items(category_names: dict[str, str]) -> list[dict]:
+    # Each product stores its category name next to the ID, so a product page
+    # gets everything it shows from one read.
     return [
         {
             "id": str(eshop_id),
             "categoryId": category_id,
+            "categoryName": category_names.get(category_id, category_id),
             "name": name,
             "brand": brand,
             "description": description,
@@ -87,19 +103,52 @@ def _existing_ids(container) -> set[str]:
     return set(container.query_items("SELECT VALUE c.id FROM c", enable_cross_partition_query=True))
 
 
-def ensure_seeded() -> None:
+def _upsert_missing(container, items: list[dict]) -> int:
+    existing = _existing_ids(container)
     created = 0
-    for container, items in ((reference, _reference_items()), (products, _product_items())):
-        existing = _existing_ids(container)
-        for item in items:
-            if item["id"] not in existing:
-                container.upsert_item(item)
-                created += 1
+    for item in items:
+        if item["id"] not in existing:
+            container.upsert_item(item)
+            created += 1
+    return created
+
+
+def _backfill_category_names(category_names: dict[str, str]) -> int:
+    """Add categoryName to products created before the sample stored it."""
+    missing = list(products.query_items(
+        "SELECT c.id, c.categoryId FROM c WHERE NOT IS_DEFINED(c.categoryName)",
+        enable_cross_partition_query=True,
+    ))
+    if not missing:
+        return 0
+    pipe = cache.pipeline(transaction=False)
+    for item in missing:
+        category_id = item["categoryId"]
+        products.patch_item(
+            item=item["id"],
+            partition_key=category_id,
+            patch_operations=[{
+                "op": "set", "path": "/categoryName",
+                "value": category_names.get(category_id, category_id),
+            }],
+        )
+        pipe.delete(f"product:{category_id}:{item['id']}")
+    pipe.execute()
+    return len(missing)
+
+
+def ensure_seeded() -> None:
+    created = _upsert_missing(reference, _reference_items())
+    category_names = _category_names()
+    created += _upsert_missing(products, _product_items(category_names))
     if created:
         print(f"[seed] upserted {created} item(s).", flush=True)
+    backfilled = _backfill_category_names(category_names)
+    if backfilled:
+        print(f"[seed] added categoryName to {backfilled} product(s).", flush=True)
 
 
 if __name__ == "__main__":
     ensure_seeded()
-    load_all()
+    load_all(force=True)
     print("Seed complete.")

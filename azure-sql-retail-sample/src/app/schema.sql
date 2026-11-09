@@ -31,16 +31,27 @@ CREATE TABLE dbo.ProductStats (
     Views     BIGINT NOT NULL DEFAULT 0
 );
 GO
+-- Orders placed in the storefront. The warehouse (simulated by the Ship order button)
+-- changes Status directly in the database; the SQL trigger then invalidates the cache.
+IF OBJECT_ID(N'dbo.Orders') IS NULL
+CREATE TABLE dbo.Orders (
+    OrderId   INT IDENTITY PRIMARY KEY,
+    ProductId INT NOT NULL REFERENCES dbo.Products(ProductId),
+    Quantity  INT NOT NULL,
+    Status    NVARCHAR(20) NOT NULL DEFAULT N'Processing',
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO
 -- Change tracking: the reference-data sync reads only changed categories, and the
--- Azure Functions SQL trigger requires it on dbo.Products.
+-- Azure Functions SQL trigger requires it on dbo.Orders.
 IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_databases WHERE database_id = DB_ID())
     ALTER DATABASE CURRENT SET CHANGE_TRACKING = ON (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON);
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(N'dbo.Categories'))
     ALTER TABLE dbo.Categories ENABLE CHANGE_TRACKING;
 GO
-IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(N'dbo.Products'))
-    ALTER TABLE dbo.Products ENABLE CHANGE_TRACKING;
+IF NOT EXISTS (SELECT 1 FROM sys.change_tracking_tables WHERE object_id = OBJECT_ID(N'dbo.Orders'))
+    ALTER TABLE dbo.Orders ENABLE CHANGE_TRACKING;
 GO
 -- The trigger stores its progress in lease tables in this schema.
 IF SCHEMA_ID(N'az_func') IS NULL

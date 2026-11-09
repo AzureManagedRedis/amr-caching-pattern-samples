@@ -5,16 +5,14 @@ holds a Redis lock so only one app replica flushes at a time.
 """
 import json
 
-from redis.exceptions import ResponseError
-
 from ..cache import cache
 from ..db import get_db
 
-PENDING = "{views}:pending"
-FLUSHING = "{views}:flushing"
+# Both names share the {views} hash tag, so Redis stores them in the same cluster slot.
+PENDING = "{views}:pending"    # New views collect here
+FLUSHING = "{views}:flushing"  # The batch being written to the database
 
-# Add each product's count to its total. Insert a row the first time a product is
-# viewed, and skip products that no longer exist.
+# Add each product's count to its total. Insert a row on its first view; skip deleted products.
 UPSERT_VIEWS_SQL = """
 MERGE dbo.ProductStats WITH (HOLDLOCK) AS t
 USING (SELECT j.ProductId, j.Views
@@ -27,25 +25,29 @@ WHEN NOT MATCHED THEN INSERT (ProductId, Views) VALUES (s.ProductId, s.Views);
 
 
 def record_view(product_id: int):
+    # Runs on every page view. Adds 1 to the product's count in Redis only.
     cache.hincrby(PENDING, str(product_id), 1)
 
 
 def flush_views():
-    # Retry a previous failed flush before taking a new batch.
+    # Runs on a schedule. 1. If the last flush failed, retry its batch in FLUSHING.
+    #    Otherwise, move the pending counts to FLUSHING. New views start a fresh PENDING.
     if not cache.exists(FLUSHING):
-        try:
-            cache.rename(PENDING, FLUSHING)
-        except ResponseError:
-            return  # Nothing pending.
+        if not cache.exists(PENDING):
+            return  # No views since the last flush.
+        cache.rename(PENDING, FLUSHING)
 
+    # 2. Turn the batch into JSON: [{"ProductId": 3, "Views": 5}, ...]
     counts = cache.hgetall(FLUSHING)
     rows = json.dumps([{"ProductId": int(pid), "Views": int(n)} for pid, n in counts.items()])
 
+    # 3. Add all the counts to the database in one statement.
     with get_db() as conn, conn.cursor() as cursor:
         cursor.execute(UPSERT_VIEWS_SQL, (rows,))
         conn.commit()
     print(f"[flush] wrote views for {len(counts)} product(s)", flush=True)
 
+    # 4. The database has the counts now, so remove the batch from Redis.
     cache.delete(FLUSHING)
 
 

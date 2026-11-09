@@ -4,14 +4,16 @@
 Server application lock so multiple app replicas don't seed at the same time,
 then:
 
-1. Runs schema.sql: tables, change tracking, and the az_func schema.
+1. Runs schema.sql: tables (including dbo.Orders), change tracking, and the
+   az_func schema.
 2. Creates a database user for the function app's managed identity and grants
    the permissions the Azure Functions SQL trigger needs (step 6 of the article).
 3. Seeds the catalog if it's empty or out of date.
 
 The app's managed identity is the server's Microsoft Entra admin, which lets it
 do all of this. In production, run these scripts once from a deployment pipeline
-and give the app only the grants in the article's "Prepare the database" section.
+and give each identity only the grants it needs, like the ones this script gives
+the function identity and the developer.
 
 It runs automatically on startup (AUTO_SEED=true). You can also run it manually:
     python -m app.seed
@@ -77,7 +79,7 @@ def _grant_function_identity(cursor) -> None:
         # use FROM EXTERNAL PROVIDER unless the server identity can read Microsoft Entra ID.
         # Creating the user from the identity's client ID (SID, TYPE = E) skips that lookup.
         cursor.execute(f"CREATE USER {user} WITH SID = {sid}, TYPE = E;")
-    cursor.execute(f"GRANT SELECT, VIEW CHANGE TRACKING ON OBJECT::dbo.Products TO {user};")
+    cursor.execute(f"GRANT SELECT, VIEW CHANGE TRACKING ON OBJECT::dbo.Orders TO {user};")
     cursor.execute(f"GRANT CREATE TABLE TO {user};")
     cursor.execute(f"GRANT ALTER, SELECT, INSERT, UPDATE, DELETE ON SCHEMA::az_func TO {user};")
 
@@ -103,7 +105,7 @@ def _seed_catalog(cursor) -> None:
         return  # catalog already current
 
     # Empty or changed catalog: reset the demo data and reseed.
-    for table in ("ProductStats", "Reviews", "Products", "Categories"):
+    for table in ("Orders", "ProductStats", "Reviews", "Products", "Categories"):
         cursor.execute(f"DELETE FROM dbo.{table};")
 
     categories = {}

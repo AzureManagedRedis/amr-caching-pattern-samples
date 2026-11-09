@@ -46,7 +46,7 @@
         <input type="text" name="name" maxlength="100" required placeholder="New name" />
         <button type="submit" class="btn btn-ghost">Save</button>
     </form>
-    <small>Writes the <code>reference</code> container only. The category chips come from the Redis hash <code>ref:category</code>, which the Azure Functions trigger for Azure Cosmos DB updates from the change feed.</small>
+    <small>Writes Azure Cosmos DB only. The category chips come from the Redis hash <code>ref:category</code>, which the Azure Functions trigger for Azure Cosmos DB updates from the change feed. Products store the category name too, so the app also updates that category's products and caches each updated product (write-through).</small>
     {% if renamed %}
     <p class="update-banner">Saved to Azure Cosmos DB. Refresh in a few seconds to see the chip change.</p>
     {% endif %}
