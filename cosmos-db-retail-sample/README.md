@@ -6,8 +6,14 @@ authenticate with **Microsoft Entra ID** (managed identity), so there are no key
 passwords in the deployed app.
 
 This sample is the runnable companion to the Microsoft Learn article
-*Optimize costs by using a cache with Azure Cosmos DB*. Each pattern module
-matches a step in that article.
+*Optimize costs by using a cache with Azure Cosmos DB*. Most pattern modules
+match a step in that article. Reference-data prefetching and the cart are extras
+that the article lists in its caching patterns table but doesn't walk through.
+The sample also adds code that the article describes but doesn't show: the
+order-status cache-aside read and a **Ship order** button that simulates the
+warehouse (both in `order_status.py`), and the complete best-sellers function. It
+also adds a category rename, which updates the prefetched reference data
+(`prefetch.py`).
 
 > Part of [amr-caching-pattern-samples](../README.md). Run the commands in this README
 > from the `cosmos-db-retail-sample/` folder.
@@ -239,8 +245,8 @@ infra/               Bicep (Container Apps, Azure Cosmos DB, Azure Managed Redis
 - **Change feed and deletes:** the triggers read the change feed in latest version
   mode, which doesn't include deletes or TTL expirations. Orders change status but
   aren't deleted, so the order-status refresh doesn't need them. For data that's
-  deleted, mark items as deleted with a flag instead, or use all versions and deletes
-  mode.
+  deleted, mark items as deleted with a flag instead, and remove the cached entry
+  when the function sees the flag.
 - **Change feed latency:** after the trigger processes all current changes, it waits
   5 seconds by default (`feed_poll_delay`) before it polls again, so cache updates
   from other writers typically land within a few seconds.

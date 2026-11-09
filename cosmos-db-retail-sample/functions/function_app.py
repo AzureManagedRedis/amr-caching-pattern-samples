@@ -4,10 +4,11 @@
 # item, no matter who changed it: the storefront, the simulated warehouse, or
 # someone in Data Explorer. Each function keeps a different part of the cache current:
 #
-# - refresh_order_status (step 6): writes each changed order's status to its
+# - refresh_order_status (step 5): writes each changed order's status to its
 #   cached `order:<customerId>:<id>:status` key, if that key is cached.
-# - update_bestsellers (step 7): maintains the best-sellers sorted set.
-# - refresh_reference (step 4): keeps the prefetched reference-data hashes current.
+# - update_bestsellers (step 6): maintains the best-sellers sorted set.
+# - refresh_reference (an extra in this sample, not an article step): keeps the
+#   prefetched reference-data hashes current.
 #
 # All three share the `leases` container, which the Bicep template creates: with
 # only a data-plane role, the trigger can't create it. The two functions on the
@@ -25,7 +26,8 @@ import azure.functions as func
 app = func.FunctionApp()
 
 
-# Step 6 (the article's code): invoked automatically when items in the orders container change
+# Step 5 (the article's code, plus the retry policy that the article recommends):
+# invoked automatically when items in the orders container change
 @app.cosmos_db_trigger(
     arg_name="orders",
     database_name="retail",
@@ -34,8 +36,12 @@ app = func.FunctionApp()
     lease_container_name="leases",
     create_lease_container_if_not_exists=False,
 )
+@app.retry(strategy="exponential_backoff", max_retry_count="5",
+           minimum_interval="00:00:04", maximum_interval="00:15:00")
 def refresh_order_status(orders: func.DocumentList) -> None:
-    from shared.cache import cache     # Import here, not at the top, so the Functions host can start
+    # The RedisCluster client from Step 2, in shared/cache.py.
+    # Import it here, not at the top of the file, so the Functions host can start.
+    from shared.cache import cache
     # Write each order's new status. xx=True skips orders that aren't cached,
     # and keepttl=True keeps the original expiry.
     pipe = cache.pipeline()
@@ -46,7 +52,8 @@ def refresh_order_status(orders: func.DocumentList) -> None:
           + ", ".join(f"{o['id']}={o['status']}" for o in orders), flush=True)
 
 
-# Step 7: invoked automatically when items in the orders container change
+# Step 6 (the complete version of the article's snippet): invoked automatically
+# when items in the orders container change
 @app.cosmos_db_trigger(
     arg_name="orders",
     database_name="retail",
@@ -56,6 +63,8 @@ def refresh_order_status(orders: func.DocumentList) -> None:
     lease_container_prefix="bestsellers-",    # Keeps these checkpoints separate from refresh_order_status
     create_lease_container_if_not_exists=False,
 )
+@app.retry(strategy="exponential_backoff", max_retry_count="5",
+           minimum_interval="00:00:04", maximum_interval="00:15:00")
 def update_bestsellers(orders: func.DocumentList) -> None:
     from shared.cache import cache
     for doc in orders:
@@ -64,17 +73,25 @@ def update_bestsellers(orders: func.DocumentList) -> None:
         if order.get("status") == "cancelled":
             continue
         # 2. Count each order once: the first time any version of it appears in the feed.
-        if not cache.set(f"order:{order['customerId']}:{order['id']}:counted", 1, nx=True, ex=7 * 24 * 3600):
+        #    The marker expires after 7 days to free memory, so an order that changes
+        #    after that is counted again. Use a longer expiry if orders change later.
+        marker = f"order:{order['customerId']}:{order['id']}:counted"
+        if not cache.set(marker, 1, nx=True, ex=7 * 24 * 3600):
             continue
         # 3. Add each line's quantity to the product's score.
-        pipe = cache.pipeline()
-        for line in order["lines"]:
-            pipe.zincrby("bestsellers", line["quantity"], f"{line['categoryId']}:{line['productId']}")
-        pipe.execute()
+        try:
+            pipe = cache.pipeline()
+            for line in order["lines"]:
+                pipe.zincrby("bestsellers", line["quantity"], f"{line['categoryId']}:{line['productId']}")
+            pipe.execute()
+        except Exception:
+            cache.delete(marker)  # Let the retry count this order
+            raise
         print(f"[orders] counted order {order['id']}", flush=True)
 
 
-# Step 4 (the article's code): invoked automatically when items in the reference container change
+# Reference-data prefetching (an extra in this sample, not an article step):
+# invoked automatically when items in the reference container change
 @app.cosmos_db_trigger(
     arg_name="items",
     database_name="retail",
