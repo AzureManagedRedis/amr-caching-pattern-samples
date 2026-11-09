@@ -54,7 +54,9 @@ something you can do in the storefront.
   single-partition query and caches the result (key `category:<categoryId>:top`); a
   reload shows **Listing served from Redis cache**. Open any product
   (`/product/<categoryId>/<id>`): the first request point-reads the item and caches it
-  (key `product:<categoryId>:<id>`), and reloads show **Served from Redis cache**. A
+  (key `product:<categoryId>:<id>`), and reloads show **Served from Redis cache**. Each
+  product stores its category name next to the category ID, so the page gets
+  everything it shows from that one read. A
   product that doesn't exist is cached briefly as "not found" so repeated requests
   don't cost RUs. See [`cache_aside.py`](src/app/patterns/cache_aside.py).
 - **Reference-data prefetching: category chips.** Categories, shipping options, and
@@ -64,8 +66,11 @@ something you can do in the storefront.
   restart can't overwrite a newer value from the change feed. On the
   home page, expand **Rename a category** and save. The rename goes only to Azure
   Cosmos DB; the `refresh_reference` function reads it from the change feed and
-  writes it with `HSET`, so the chip changes within seconds. See
-  [`prefetch.py`](src/app/patterns/prefetch.py) and
+  writes it with `HSET`, so the chip changes within seconds. Because products store
+  the category name too, the app also updates that category's products in their
+  single partition and caches each updated product (write-through). See
+  [`prefetch.py`](src/app/patterns/prefetch.py),
+  [`write_through.py`](src/app/patterns/write_through.py), and
   [`functions/function_app.py`](functions/function_app.py).
 - **Write-through: price updates.** On a product page, expand **Update price
   (write-through)** and save. The app patches the price in Azure Cosmos DB, caches the
@@ -124,7 +129,7 @@ hashes, so the storefront is ready as soon as `azd` finishes.
 
 | Resource | SKU / tier |
 | --- | --- |
-| Azure Managed Redis | `Balanced_B0`, OSS clustering policy, Entra-only auth |
+| Azure Managed Redis | `Balanced_B0`, Enterprise clustering policy, Entra-only auth |
 | Azure Cosmos DB for NoSQL account | Serverless, local (key) auth disabled |
 | Azure Container Apps environment + web app | Consumption, 1-3 replicas |
 | Azure Functions app (Azure Cosmos DB triggers) | Linux App Service plan `B1`, Python 3.12 |
@@ -215,7 +220,7 @@ src/app/
   main.py            FastAPI app + storefront routes (each tagged with its pattern)
   config.py          Environment settings
   db.py              azure-cosmos client with Entra auth (DefaultAzureCredential)
-  cache.py           redis-py RedisCluster client with redis-entraid, created on first use
+  cache.py           redis-py Redis client with redis-entraid, created on first use
   seed.py            Sample catalog and reference data (upserts missing items only)
   patterns/          The caching patterns (the teaching core)
   templates/, static/  Self-contained storefront UI
@@ -227,13 +232,14 @@ infra/               Bicep (Container Apps, Azure Cosmos DB, Azure Managed Redis
 
 ## Notes
 
-- **Clustering:** Azure Managed Redis uses the **OSS clustering policy** and the app
-  connects with a cluster-aware client (`redis.cluster.RedisCluster`), which routes
-  each key to its shard. Because OSS cluster clients connect to shard nodes by IP,
-  the client disables TLS hostname verification; the CA certificate chain is still
-  validated. If you need hostname verification, use the Enterprise clustering policy,
-  where all connections use the cache hostname. Each multi-key pipeline in the sample touches keys the cluster client
-  can route individually, so no hash tags are needed.
+- **Clustering:** Azure Managed Redis uses the **Enterprise clustering policy**. The
+  cache routes each key to its shard behind one endpoint, so the app connects with the
+  standard `redis.Redis` client and verifies that the TLS certificate matches the cache
+  hostname. The OSS clustering policy redirects clients to shard nodes by IP address,
+  which the certificate doesn't list, so cluster clients must turn off hostname
+  verification; if you use it, connect only through a private endpoint. Each pipeline
+  in the sample uses `transaction=False`: the commands are sent together but don't
+  run as one transaction, so keys on different shards need no hash tags.
 - **Why the Redis client is created lazily:** the redis-entraid credential provider
   requests its first token on the thread that opens the first connection. If an
   asyncio event loop is running on that thread, it blocks the loop while waiting for

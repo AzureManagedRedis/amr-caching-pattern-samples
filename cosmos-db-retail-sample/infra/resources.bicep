@@ -160,9 +160,9 @@ resource redisDb 'Microsoft.Cache/redisEnterprise/databases@2025-07-01' = {
   properties: {
     clientProtocol: 'Encrypted'
     port: 10000
-    // OSS clustering policy exposes the Redis Cluster API; the app and the function
-    // connect with redis.cluster.RedisCluster, which routes each key to its shard.
-    clusteringPolicy: 'OSSCluster'
+    // Enterprise clustering policy: one endpoint routes each key to its shard, so the
+    // app and the function connect with redis.Redis and verify the cache hostname.
+    clusteringPolicy: 'EnterpriseCluster'
     // Listings, products, and carts carry a TTL; reference data and the best-sellers
     // ranking don't. volatile-lru evicts only keys that have a TTL, which protects the others.
     evictionPolicy: 'VolatileLRU'

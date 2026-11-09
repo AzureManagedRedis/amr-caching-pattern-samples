@@ -39,12 +39,12 @@ app = func.FunctionApp()
 @app.retry(strategy="exponential_backoff", max_retry_count="5",
            minimum_interval="00:00:04", maximum_interval="00:15:00")
 def refresh_order_status(orders: func.DocumentList) -> None:
-    # The RedisCluster client from Step 2, in shared/cache.py.
+    # The Redis client from Step 2, in shared/cache.py.
     # Import it here, not at the top of the file, so the Functions host can start.
     from shared.cache import cache
     # Write each order's new status. xx=True skips orders that aren't cached,
     # and keepttl=True keeps the original expiry.
-    pipe = cache.pipeline()
+    pipe = cache.pipeline(transaction=False)
     for order in orders:
         pipe.set(f"order:{order['customerId']}:{order['id']}:status", order["status"], xx=True, keepttl=True)
     pipe.execute()
@@ -80,7 +80,7 @@ def update_bestsellers(orders: func.DocumentList) -> None:
             continue
         # 3. Add each line's quantity to the product's score.
         try:
-            pipe = cache.pipeline()
+            pipe = cache.pipeline(transaction=False)
             for line in order["lines"]:
                 pipe.zincrby("bestsellers", line["quantity"], f"{line['categoryId']}:{line['productId']}")
             pipe.execute()
@@ -103,9 +103,9 @@ def update_bestsellers(orders: func.DocumentList) -> None:
     create_lease_container_if_not_exists=False,
 )
 def refresh_reference(items: func.DocumentList) -> None:
-    from shared.cache import cache             # The RedisCluster client from Step 2, in shared/cache.py
+    from shared.cache import cache             # The Redis client from Step 2, in shared/cache.py
     # Write each changed item with the same properties that load_reference stores.
-    pipe = cache.pipeline()
+    pipe = cache.pipeline(transaction=False)
     for doc in items:
         item = dict(doc)
         value = {"id": item["id"], "name": item["name"], "data": item.get("data")}

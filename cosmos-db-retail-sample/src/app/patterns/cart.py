@@ -26,7 +26,7 @@ CART_TTL = settings.cart_ttl_seconds  # Expire after 30 minutes of inactivity.
 def add_to_cart(user_id: str, category_id: str, product_id: str, quantity: int = 1):
     # Runs on every click. Updates Redis only.
     key = f"cart:{user_id}"
-    pipe = cache.pipeline()
+    pipe = cache.pipeline(transaction=False)
     pipe.hincrby(key, f"{category_id}:{product_id}", quantity)
     pipe.expire(key, CART_TTL)
     pipe.execute()

@@ -103,13 +103,11 @@ def product_page(
     start = time.perf_counter()
     product, source = cache_aside.get_product(category_id, product_id)  # cache-aside
     elapsed_ms = (time.perf_counter() - start) * 1000
-    categories = {c["id"]: c["name"] for c in prefetch.get_reference("category")}
     return templates.TemplateResponse(
         request,
         "product.html",
         {
-            "product": product,
-            "category_name": categories.get(category_id, category_id),
+            "product": product,  # includes categoryName, so no second lookup
             "source": source,
             "elapsed_ms": elapsed_ms,
             "updated": updated,
@@ -128,7 +126,9 @@ def set_price(category_id: str, product_id: str, price: float = Form(...)):
 
 @app.post("/categories/rename")
 def rename_category(category_id: str = Form(...), name: str = Form(...)):
-    prefetch.rename_category(category_id, name.strip()[:100])  # the change feed updates the hash
+    name = name.strip()[:100]
+    prefetch.rename_category(category_id, name)  # the change feed updates the hash
+    write_through.rename_category_on_products(category_id, name)  # products store the name too
     return RedirectResponse(url="/?renamed=1", status_code=303)
 
 
