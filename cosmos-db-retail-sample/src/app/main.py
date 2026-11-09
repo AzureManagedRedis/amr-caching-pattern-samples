@@ -16,7 +16,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, Form, Request
+from azure.cosmos.exceptions import CosmosResourceNotFoundError
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -127,7 +128,12 @@ def set_price(category_id: str, product_id: str, price: float = Form(...)):
 @app.post("/categories/rename")
 def rename_category(category_id: str = Form(...), name: str = Form(...)):
     name = name.strip()[:100]
-    prefetch.rename_category(category_id, name)  # the change feed updates the hash
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name can't be empty.")
+    try:
+        prefetch.rename_category(category_id, name)  # the change feed updates the hash
+    except CosmosResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Category not found.")
     write_through.rename_category_on_products(category_id, name)  # products store the name too
     return RedirectResponse(url="/?renamed=1", status_code=303)
 

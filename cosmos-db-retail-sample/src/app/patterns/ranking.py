@@ -11,4 +11,4 @@ from ..cache import cache
 
 
 def get_bestsellers(n: int = 10) -> list[tuple[str, float]]:
-    return cache.zrevrange("bestsellers", 0, n - 1, withscores=True)
+    return cache.zrange("bestsellers", 0, n - 1, desc=True, withscores=True)
