@@ -1,10 +1,11 @@
 """Azure Managed Redis client with Microsoft Entra ID auth (step 2 of the article).
 
-The client is the article's: `RedisCluster` (the cache uses the OSS clustering
-policy) with the redis-entraid credential provider, which gets a token from
+The client is the article's: `redis.Redis` (the cache uses the Enterprise
+clustering policy, so all connections use the cache hostname) with the
+redis-entraid credential provider, which gets a token from
 `DefaultAzureCredential` and reauthenticates open connections before the token
-expires. Cluster redirects use node IP addresses, which the certificate doesn't
-list, so hostname verification is off; the certificate chain is still validated.
+expires. The client verifies the certificate and checks that it matches the
+cache hostname.
 
 Why the client is created lazily: redis-entraid starts its token manager when the
 client opens its first connection. If an asyncio event loop is running on that
@@ -18,27 +19,27 @@ first use, on a separate thread that has no running loop. Pattern code uses
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from redis.cluster import RedisCluster
+import redis
 from redis_entraid.cred_provider import create_from_default_azure_credential
 
 from .config import settings
 
-_client: RedisCluster | None = None
+_client: redis.Redis | None = None
 _lock = threading.Lock()
 
 
-def _create() -> RedisCluster:
-    return RedisCluster(
+def _create() -> redis.Redis:
+    return redis.Redis(
         host=settings.redis_host,  # <name>.<region>.redis.azure.net
         port=settings.redis_port,
         ssl=True,
-        ssl_check_hostname=False,  # Cluster redirects use node IPs; the certificate is still verified.
+        ssl_check_hostname=True,  # The certificate must match the cache hostname.
         credential_provider=create_from_default_azure_credential(("https://redis.azure.com/.default",)),
         decode_responses=True,
     )
 
 
-def get_client() -> RedisCluster:
+def get_client() -> redis.Redis:
     global _client
     if _client is None:
         with _lock:
@@ -50,7 +51,7 @@ def get_client() -> RedisCluster:
 
 
 class _LazyCache:
-    """Forwards every call to the RedisCluster client, creating it on first use."""
+    """Forwards every call to the Redis client, creating it on first use."""
 
     def __getattr__(self, name):
         return getattr(get_client(), name)

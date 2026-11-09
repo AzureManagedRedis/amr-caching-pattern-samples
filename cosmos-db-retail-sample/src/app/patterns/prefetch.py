@@ -33,7 +33,7 @@ def load_reference(ref_type: str):
 
     # 2. Replace the hash (id -> item) in one batch.
     key = f"ref:{ref_type}"
-    pipe = cache.pipeline()
+    pipe = cache.pipeline(transaction=False)
     pipe.delete(key)
     if mapping:
         pipe.hset(key, mapping=mapping)

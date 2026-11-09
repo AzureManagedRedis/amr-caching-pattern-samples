@@ -8,13 +8,13 @@
     &middot; {{ '%.1f' | format(elapsed_ms) }} ms
 </p>
 {% else %}
-<a class="back" href="/?category={{ product.categoryId }}">&larr; {{ category_name }}</a>
+<a class="back" href="/?category={{ product.categoryId }}">&larr; {{ product.categoryName or product.categoryId }}</a>
 <section class="detail">
     <div class="detail-media">
         <img src="{{ product.imageUrl }}" alt="{{ product.name }}" />
     </div>
     <div class="detail-body">
-        <span class="card-brand">{{ product.brand }} &middot; {{ category_name }}</span>
+        <span class="card-brand">{{ product.brand }} &middot; {{ product.categoryName or product.categoryId }}</span>
         <h1>{{ product.name }}</h1>
         <p class="price">${{ '%.2f' | format(product.price) }}</p>
         <p class="desc">{{ product.description }}</p>

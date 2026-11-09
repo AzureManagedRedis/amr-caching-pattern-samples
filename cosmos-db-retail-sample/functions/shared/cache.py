@@ -12,14 +12,14 @@ file: see the note there.
 """
 import os
 
-from redis.cluster import RedisCluster
+import redis
 from redis_entraid.cred_provider import create_from_default_azure_credential
 
-cache = RedisCluster(
+cache = redis.Redis(
     host=os.environ["REDIS_HOST"],          # <name>.<region>.redis.azure.net
     port=int(os.environ.get("REDIS_PORT", "10000")),
     ssl=True,
-    ssl_check_hostname=False,               # Cluster redirects use node IPs; the certificate is still verified.
+    ssl_check_hostname=True,                # The certificate must match the cache hostname.
     credential_provider=create_from_default_azure_credential(("https://redis.azure.com/.default",)),
     decode_responses=True,
 )
