@@ -35,16 +35,14 @@
             {% endif %}
         </details>
 
-        <details class="admin" {% if restocked %}open{% endif %}>
-            <summary>Restock from the warehouse (event-driven invalidation)</summary>
-            <form action="/product/{{ product.id }}/restock" method="post">
-                <input type="number" name="quantity" value="10" min="1" />
-                <button type="submit" class="btn btn-ghost">Restock</button>
+        <details class="admin">
+            <summary>Place an order (event-driven invalidation)</summary>
+            <form action="/orders" method="post">
+                <input type="hidden" name="product_id" value="{{ product.id }}" />
+                <input type="number" name="quantity" value="1" min="1" max="10" />
+                <button type="submit" class="btn btn-ghost">Place order</button>
             </form>
-            <small>Simulates another system that writes Azure SQL only. The Azure Functions SQL trigger deletes this product's cache key within seconds.</small>
-            {% if restocked %}
-            <p class="update-banner">Stock updated in Azure SQL only. This page may still show the cached stock; refresh in a few seconds to read the new value from the database.</p>
-            {% endif %}
+            <small>Creates an order in Azure SQL and opens its status page, where you can ship it as the warehouse would.</small>
         </details>
 
         <p class="cache-badge cache-{{ source }}">

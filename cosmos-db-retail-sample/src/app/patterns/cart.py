@@ -1,12 +1,16 @@
 """Cart and session offload: active carts live in Redis, orders in Azure Cosmos DB.
 
-Matches step 8 of "Optimize costs by using a cache with Azure Cosmos DB for
-NoSQL". Every "add to cart" click updates a Redis hash with a sliding TTL and
-costs no RUs. Checkout reads current prices from Azure Cosmos DB, writes one
-order whose ID is the checkout ID (an idempotency key), and deletes the cart. A
-repeated submit of the same checkout returns the existing order instead of
-creating a second one. The order has the shape the best-sellers function in
-step 7 expects.
+Session and state offload, from the caching patterns table in "Optimize costs
+by using a cache with Azure Cosmos DB". The article has no code step for it;
+this sample includes it as an extra. Every "add to cart" click updates a Redis
+hash with a sliding TTL and costs no RUs. Checkout reads current prices from
+Azure Cosmos DB, writes one order whose ID is the checkout ID (an idempotency
+key), and deletes the cart. A repeated submit of the same checkout returns the
+existing order instead of creating a second one. The order has the shape the
+best-sellers function (step 6) expects.
+
+The cart lives only in Redis, so if Redis loses it, the shopper loses it. If
+that isn't acceptable, save a snapshot to Azure Cosmos DB.
 """
 from datetime import datetime, timezone
 
@@ -22,7 +26,7 @@ CART_TTL = settings.cart_ttl_seconds  # Expire after 30 minutes of inactivity.
 def add_to_cart(user_id: str, category_id: str, product_id: str, quantity: int = 1):
     # Runs on every click. Updates Redis only.
     key = f"cart:{user_id}"
-    pipe = cache.pipeline()
+    pipe = cache.pipeline(transaction=False)
     pipe.hincrby(key, f"{category_id}:{product_id}", quantity)
     pipe.expire(key, CART_TTL)
     pipe.execute()
@@ -55,10 +59,7 @@ def checkout(user_id: str, customer_id: str, checkout_id: str) -> dict:
         try:
             product = products.read_item(item=product_id, partition_key=category_id)
         except CosmosResourceNotFoundError:
-            # The product was removed, or its soft-delete TTL expired, after it was added to the cart.
             raise ValueError(f"Product {product_id} is no longer available.") from None
-        if product.get("isDeleted"):
-            raise ValueError(f"Product {product_id} is no longer available.")
         lines.append({
             "categoryId": category_id,
             "productId": product_id,

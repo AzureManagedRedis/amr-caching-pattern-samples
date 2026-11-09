@@ -1,24 +1,20 @@
-# Event-driven invalidation with the Azure SQL trigger for Azure Functions.
-#
-# The trigger uses change tracking to call this function with every changed row in
-# dbo.Products, no matter who changed it: the storefront, a batch job, or someone in
-# the query editor. The function deletes the matching cache keys; the next read
-# repopulates them through cache-aside.
+# function_app.py
 import json
-
 import azure.functions as func
-
-from shared.cache import cache
+from shared.cache import cache             # The RedisCluster client
 
 app = func.FunctionApp()
 
-
+# Invoked automatically when the SQL trigger detects order changes
 @app.sql_trigger(
     arg_name="changes",
-    table_name="dbo.Products",
+    table_name="dbo.Orders",
     connection_string_setting="SqlConnectionString",
 )
-def invalidate_products(changes: str) -> None:
-    keys = {f"product:{c['Item']['ProductId']}" for c in json.loads(changes)}
-    cache.delete(*keys)
-    print(f"[sql-trigger] invalidated {sorted(keys)}", flush=True)
+def invalidate_order_status(changes: str) -> None:
+    # 1. changes is a JSON list of changed rows. Build the cache key for each one.
+    #    A set removes duplicates when the same order changed more than once.
+    keys = {f"order:{c['Item']['OrderId']}:status" for c in json.loads(changes)}
+    # 2. Delete the keys so the next read reloads them. Skip an empty batch (DEL needs keys).
+    if keys:
+        cache.delete(*keys)

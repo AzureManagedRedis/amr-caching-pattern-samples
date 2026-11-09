@@ -8,13 +8,13 @@
     &middot; {{ '%.1f' | format(elapsed_ms) }} ms
 </p>
 {% else %}
-<a class="back" href="/?category={{ product.categoryId }}">&larr; {{ category_name }}</a>
+<a class="back" href="/?category={{ product.categoryId }}">&larr; {{ product.categoryName or product.categoryId }}</a>
 <section class="detail">
     <div class="detail-media">
         <img src="{{ product.imageUrl }}" alt="{{ product.name }}" />
     </div>
     <div class="detail-body">
-        <span class="card-brand">{{ product.brand }} &middot; {{ category_name }}</span>
+        <span class="card-brand">{{ product.brand }} &middot; {{ product.categoryName or product.categoryId }}</span>
         <h1>{{ product.name }}</h1>
         <p class="price">${{ '%.2f' | format(product.price) }}</p>
         <p class="desc">{{ product.description }}</p>
@@ -39,26 +39,6 @@
             {% if updated %}
             <p class="update-banner">Price updated in Azure Cosmos DB <strong>and</strong> the Redis cache.</p>
             {% endif %}
-        </details>
-
-        <details class="admin" {% if restocked %}open{% endif %}>
-            <summary>Restock from the warehouse (event-driven refresh)</summary>
-            <form action="/product/{{ product.categoryId }}/{{ product.id }}/restock" method="post">
-                <input type="number" name="quantity" value="10" min="1" />
-                <button type="submit" class="btn btn-ghost">Restock</button>
-            </form>
-            <small>Simulates another system that writes Azure Cosmos DB only. The Azure Functions trigger for Azure Cosmos DB refreshes this product's cache key from the change feed within seconds.</small>
-            {% if restocked %}
-            <p class="update-banner">Stock updated in Azure Cosmos DB only. This page may still show the cached stock; refresh in a few seconds to see the change feed update the cache.</p>
-            {% endif %}
-        </details>
-
-        <details class="admin">
-            <summary>Remove this product (soft delete)</summary>
-            <form action="/product/{{ product.categoryId }}/{{ product.id }}/delete" method="post">
-                <button type="submit" class="btn btn-ghost">Remove</button>
-            </form>
-            <small>Sets <code>isDeleted</code> and a <code>ttl</code> in Azure Cosmos DB only. The change feed function deletes the cached product and listing within seconds, and TTL removes the item later.</small>
         </details>
 
         <p class="cache-badge cache-{{ source }}">

@@ -11,9 +11,10 @@ from ..cache import cache
 from ..config import settings
 from ..db import get_db
 
-PRODUCT_TTL = settings.product_ttl_seconds
-NOT_FOUND_TTL = settings.not_found_ttl_seconds
+PRODUCT_TTL = settings.product_ttl_seconds      # seconds
+NOT_FOUND_TTL = settings.not_found_ttl_seconds  # seconds
 
+# The product page query: one product, its category name, and its review summary.
 PRODUCT_PAGE_SQL = """
 SELECT p.ProductId, p.Name, p.Brand, p.Description, p.ImageUrl, p.Price, p.Stock,
        c.Name AS Category,
@@ -31,17 +32,19 @@ WHERE p.ProductId = ?;
 def get_product(product_id: int) -> tuple[dict | None, str]:
     """Return (product, source). source is "cache" or "database"."""
     key = f"product:{product_id}"
+
+    # 1. Try the cache first.
     cached = cache.get(key)
     if cached is not None:
         return json.loads(cached), "cache"  # "null" means the product doesn't exist.
 
+    # 2. On a miss, read from Azure SQL Database.
     with get_db() as conn, conn.cursor() as cursor:
         cursor.execute(PRODUCT_PAGE_SQL, (product_id,))
         row = cursor.fetchone()
 
+    # 3. Cache "not found" briefly so that repeated requests for a missing ID don't reach the database.
     if row is None:
-        # Negative caching: remember "not found" briefly so probes for missing
-        # IDs don't run the join every time.
         cache.set(key, json.dumps(None), ex=NOT_FOUND_TTL)
         return None, "database"
 
@@ -57,6 +60,8 @@ def get_product(product_id: int) -> tuple[dict | None, str]:
         "reviewCount": row.ReviewCount,
         "avgRating": float(row.AvgRating) if row.AvgRating is not None else None,
     }
+
+    # 4. Populate the cache with a TTL, then return.
     ttl = PRODUCT_TTL + random.randint(0, 60)  # jitter avoids synchronized expiry
     cache.set(key, json.dumps(product), ex=ttl)
     return product, "database"
