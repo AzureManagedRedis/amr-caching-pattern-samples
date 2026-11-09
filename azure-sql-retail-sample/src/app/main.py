@@ -12,7 +12,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -135,7 +135,10 @@ def ship_order(order_id: int):
 
 @app.post("/categories/rename")
 def rename_category(category_id: int = Form(...), name: str = Form(...)):
-    prefetch.rename_category(category_id, name.strip()[:100])  # change tracking sync picks it up
+    name = name.strip()[:100]
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name can't be empty.")
+    prefetch.rename_category(category_id, name)  # change tracking sync picks it up
     return RedirectResponse(url="/?renamed=1", status_code=303)
 
 
