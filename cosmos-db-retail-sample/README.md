@@ -6,7 +6,7 @@ authenticate with **Microsoft Entra ID** (managed identity), so there are no key
 passwords in the deployed app.
 
 This sample is the runnable companion to the Microsoft Learn article
-*Optimize costs by using a cache with Azure Cosmos DB*. Most pattern modules
+[Optimize costs by using a cache with Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/how-to-cache). Most pattern modules
 match a step in that article. Reference-data prefetching and the cart are extras
 that the article lists in its caching patterns table but doesn't walk through.
 The sample also adds code that the article describes but doesn't show: the
