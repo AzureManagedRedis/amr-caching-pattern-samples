@@ -1,7 +1,7 @@
 """Reference-data prefetch: categories, shipping options, and store settings.
 
-Reference-data prefetching, from the caching patterns table in "Optimize costs
-by using a cache with Azure Cosmos DB". The article has no code step for it;
+Reference-data prefetching, from the caching patterns table in "Improve
+efficiency of reads by using a cache with Azure Cosmos DB". The article has no code step for it;
 this sample includes it as an extra. `load_reference` loads every item of one type
 from the `reference` container into the Redis hash `ref:{type}` with no TTL. At
 startup, `load_all` loads only the hashes that don't exist yet, from one replica at

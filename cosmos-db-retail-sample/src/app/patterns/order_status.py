@@ -1,6 +1,6 @@
 """Event-driven refresh demo: cached order status.
 
-Matches step 5 of "Optimize costs by using a cache with Azure Cosmos DB".
+Matches step 5 of "Improve efficiency of reads by using a cache with Azure Cosmos DB".
 Shoppers read each order's status through cache-aside on
 `order:<customerId>:<id>:status`. The warehouse ships orders by updating the `orders`
 container directly, without touching Redis (`ship_order` simulates it). The

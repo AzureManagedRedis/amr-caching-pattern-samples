@@ -1,6 +1,6 @@
 """Write-through: patch the price in Azure Cosmos DB, then update the cache.
 
-Matches step 4 of "Optimize costs by using a cache with Azure Cosmos DB".
+Matches step 4 of "Improve efficiency of reads by using a cache with Azure Cosmos DB".
 A partial document update (patch) returns the full updated item, so the
 app caches it without a second read and deletes the category listing, which
 still shows the old price. Passing the item's `_etag` makes the write fail if
