@@ -1,6 +1,6 @@
 """Cache-aside: category listings and hot product items.
 
-Matches step 3 of "Optimize costs by using a cache with Azure Cosmos DB".
+Matches step 3 of "Improve efficiency of reads by using a cache with Azure Cosmos DB".
 The logic is the article's: try Redis, on a miss read Azure Cosmos DB in
 one partition, then populate the cache with a jittered TTL. Missing products
 are cached briefly as "not found". The only additions are

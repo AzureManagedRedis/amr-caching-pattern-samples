@@ -6,7 +6,7 @@ authenticate with **Microsoft Entra ID** (managed identity), so there are no key
 passwords in the deployed app.
 
 This sample is the runnable companion to the Microsoft Learn article
-*Improve performance by using a cache with Azure SQL Database*. Each pattern module
+[Improve performance by using a cache with Azure SQL Database](https://learn.microsoft.com/azure/azure-sql/database/how-to-cache). Each pattern module
 matches a step in that article.
 
 > Part of [amr-caching-pattern-samples](../README.md). Run the commands in this README

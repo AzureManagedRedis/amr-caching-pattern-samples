@@ -1,7 +1,7 @@
 """Cart and session offload: active carts live in Redis, orders in Azure Cosmos DB.
 
-Session and state offload, from the caching patterns table in "Optimize costs
-by using a cache with Azure Cosmos DB". The article has no code step for it;
+Session and state offload, from the caching patterns table in "Improve
+efficiency of reads by using a cache with Azure Cosmos DB". The article has no code step for it;
 this sample includes it as an extra. Every "add to cart" click updates a Redis
 hash with a sliding TTL and costs no RUs. Checkout reads current prices from
 Azure Cosmos DB, writes one order whose ID is the checkout ID (an idempotency

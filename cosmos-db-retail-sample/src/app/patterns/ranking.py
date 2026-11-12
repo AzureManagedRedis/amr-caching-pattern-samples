@@ -1,6 +1,6 @@
 """Best-sellers ranking from a Redis sorted set.
 
-Matches step 6 of "Optimize costs by using a cache with Azure Cosmos DB".
+Matches step 6 of "Improve efficiency of reads by using a cache with Azure Cosmos DB".
 The `update_bestsellers` function in functions/function_app.py reads the
 change feed on `orders` and adds each order line's quantity with `ZINCRBY`, so
 the app never runs a cross-partition aggregation over orders. The app reads the
